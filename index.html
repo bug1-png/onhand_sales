@@ -154,6 +154,29 @@
   .btn.primary:hover{ filter:brightness(1.06); }
   .btn.ghost{ border-color:transparent; background:transparent; }
 
+  /* ---------- Multi-select ---------- */
+  .multi-select{ position:relative; }
+  .multi-select-btn{
+    min-width:200px; max-width:280px; text-align:left; display:flex; justify-content:space-between; align-items:center; gap:8px;
+    background:var(--surface); color:var(--text); border:1px solid var(--border-strong); border-radius:7px; padding:7px 10px;
+    font-size:13px; font-family:inherit; min-height:34px; cursor:pointer; white-space:nowrap; overflow:hidden;
+  }
+  .multi-select-btn span.txt{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .multi-select-btn .car{ opacity:.55; font-size:10px; flex:none; }
+  .multi-select-btn:hover{ background:var(--surface-2); }
+  .multi-select-panel{
+    position:absolute; top:calc(100% + 4px); left:0; background:var(--surface); border:1px solid var(--border-strong);
+    border-radius:10px; box-shadow:var(--shadow); z-index:50; width:260px; max-height:320px; overflow:auto; padding:8px;
+  }
+  .multi-select-panel[hidden]{ display:none; }
+  .ms-actions{ display:flex; gap:14px; padding:2px 6px 8px; border-bottom:1px solid var(--border); margin-bottom:6px; }
+  .ms-link{ background:none; border:none; color:var(--accent); font-size:12px; cursor:pointer; padding:0; font-family:inherit; }
+  .ms-link:hover{ text-decoration:underline; }
+  .ms-item{ display:flex; align-items:center; gap:8px; padding:6px 6px; border-radius:6px; cursor:pointer; font-size:13px; }
+  .ms-item:hover{ background:var(--surface-2); }
+  .ms-item input{ accent-color:var(--accent); width:15px; height:15px; flex:none; }
+  .ms-item span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
   /* ---------- KPI ---------- */
   .kpi-grid{ display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin:20px 0; }
   @media (max-width:1100px){ .kpi-grid{ grid-template-columns:repeat(2,1fr);} }
@@ -294,9 +317,18 @@
         <label for="fDateTo">ถึง</label>
         <input type="date" id="fDateTo">
       </div>
-      <div class="field">
-        <label for="fSales">พนักงานขาย</label>
-        <select id="fSales"><option value="">ทั้งหมด</option></select>
+      <div class="field multi-select">
+        <label id="fSalesLabel">พนักงานขาย</label>
+        <button type="button" class="multi-select-btn" id="fSalesBtn" aria-haspopup="listbox" aria-expanded="false">
+          <span class="txt" id="fSalesBtnText">ทั้งหมด</span><span class="car">▾</span>
+        </button>
+        <div class="multi-select-panel" id="fSalesPanel" role="listbox" aria-multiselectable="true" aria-labelledby="fSalesLabel" hidden>
+          <div class="ms-actions">
+            <button type="button" class="ms-link" id="msSelectAll">เลือกทั้งหมด</button>
+            <button type="button" class="ms-link" id="msClearAll">ล้างทั้งหมด</button>
+          </div>
+          <div class="ms-list" id="fSalesList"></div>
+        </div>
       </div>
       <div class="field">
         <label for="fSearch">ค้นหาชื่อ / เบอร์โทร / รหัสลูกค้า</label>
@@ -480,15 +512,12 @@ const DATA = [{"CustomerID":"538177","Type":"Inbound","Name":"ภานุพง
   const $ = sel => document.querySelector(sel);
   const $$ = sel => Array.from(document.querySelectorAll(sel));
 
-  const fDateFrom = $("#fDateFrom"), fDateTo = $("#fDateTo"), fSales = $("#fSales"), fSearch = $("#fSearch");
+  const fDateFrom = $("#fDateFrom"), fDateTo = $("#fDateTo"), fSearch = $("#fSearch");
   fDateFrom.value = minDate; fDateTo.value = maxDate; fDateFrom.min = minDate; fDateFrom.max = maxDate; fDateTo.min = minDate; fDateTo.max = maxDate;
-  salespeople.forEach(sp => {
-    const o = document.createElement("option"); o.value = sp; o.textContent = sp; fSales.appendChild(o);
-  });
   $("#coverageLabel").textContent = "ข้อมูล " + minDate + " ถึง " + maxDate;
 
   const state = {
-    dateFrom: minDate, dateTo: maxDate, salesperson: "", search: "",
+    dateFrom: minDate, dateTo: maxDate, salesperson: new Set(salespeople), search: "",
     walkin: { status:"", reason:"", search:"", sortKey:"LastContactDate", sortDir:-1, page:1, pageSize:25 },
     inbound: { status:"", source:"", reason:"", search:"", sortKey:"LastContactDate", sortDir:-1, page:1, pageSize:25 },
     sales: { sortKey:"onhand", sortDir:-1 }
@@ -497,7 +526,7 @@ const DATA = [{"CustomerID":"538177","Type":"Inbound","Name":"ภานุพง
   function globalFiltered(){
     return DATA.filter(d => {
       if (d.LastContactDate && (d.LastContactDate < state.dateFrom || d.LastContactDate > state.dateTo)) return false;
-      if (state.salesperson && (d.Salesperson || UNASSIGNED) !== state.salesperson) return false;
+      if (!state.salesperson.has(d.Salesperson || UNASSIGNED)) return false;
       if (state.search) {
         const s = state.search.toLowerCase();
         const hay = (d.Name+" "+d.Mobile+" "+d.CustomerID).toLowerCase();
@@ -506,6 +535,54 @@ const DATA = [{"CustomerID":"538177","Type":"Inbound","Name":"ภานุพง
       return true;
     });
   }
+
+  // ---------- Salesperson multi-select ----------
+  const fSalesBtn = $("#fSalesBtn"), fSalesPanel = $("#fSalesPanel"), fSalesBtnText = $("#fSalesBtnText"), fSalesList = $("#fSalesList");
+  fSalesList.innerHTML = salespeople.map(sp => (
+    '<label class="ms-item"><input type="checkbox" value="'+encodeURIComponent(sp)+'" checked><span>'+sp+'</span></label>'
+  )).join("");
+
+  function syncSalesButtonText(){
+    const n = state.salesperson.size, total = salespeople.length;
+    if (n === total) fSalesBtnText.textContent = "ทั้งหมด";
+    else if (n === 0) fSalesBtnText.textContent = "ไม่ได้เลือก";
+    else if (n <= 2) fSalesBtnText.textContent = Array.from(state.salesperson).join(", ");
+    else fSalesBtnText.textContent = "เลือก " + n + " คน";
+  }
+  function syncSalesCheckboxes(){
+    fSalesList.querySelectorAll("input[type=checkbox]").forEach(cb => {
+      cb.checked = state.salesperson.has(decodeURIComponent(cb.value));
+    });
+    syncSalesButtonText();
+  }
+  function setSalesSelection(names){
+    state.salesperson = new Set(names);
+    syncSalesCheckboxes();
+    renderAll();
+  }
+  fSalesBtn.addEventListener("click", e => {
+    e.stopPropagation();
+    const isHidden = fSalesPanel.hasAttribute("hidden");
+    if (isHidden) fSalesPanel.removeAttribute("hidden"); else fSalesPanel.setAttribute("hidden","");
+    fSalesBtn.setAttribute("aria-expanded", isHidden ? "true":"false");
+  });
+  document.addEventListener("click", e => {
+    if (!fSalesPanel.hasAttribute("hidden") && !fSalesPanel.contains(e.target) && e.target !== fSalesBtn) {
+      fSalesPanel.setAttribute("hidden",""); fSalesBtn.setAttribute("aria-expanded","false");
+    }
+  });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape") { fSalesPanel.setAttribute("hidden",""); fSalesBtn.setAttribute("aria-expanded","false"); }
+  });
+  fSalesList.addEventListener("change", e => {
+    const cb = e.target;
+    const name = decodeURIComponent(cb.value);
+    if (cb.checked) state.salesperson.add(name); else state.salesperson.delete(name);
+    syncSalesButtonText();
+    renderAll();
+  });
+  $("#msSelectAll").addEventListener("click", () => setSalesSelection(salespeople));
+  $("#msClearAll").addEventListener("click", () => setSalesSelection([]));
 
   function pillHtml(status){
     return '<span class="pill '+status+'">'+STATUS_LABEL[status]+'</span>';
@@ -592,7 +669,7 @@ const DATA = [{"CustomerID":"538177","Type":"Inbound","Name":"ภานุพง
     $$(".sp-link").forEach(a=>a.addEventListener("click", e=>{
       e.preventDefault();
       const sp = decodeURIComponent(a.dataset.sp);
-      fSales.value = sp; state.salesperson = sp; renderAll();
+      setSalesSelection([sp]);
     }));
   }
 
@@ -866,15 +943,15 @@ const DATA = [{"CustomerID":"538177","Type":"Inbound","Name":"ภานุพง
 
   fDateFrom.addEventListener("change", ()=>{ state.dateFrom = fDateFrom.value; renderAll(); });
   fDateTo.addEventListener("change", ()=>{ state.dateTo = fDateTo.value; renderAll(); });
-  fSales.addEventListener("change", ()=>{ state.salesperson = fSales.value; renderAll(); });
   let searchTimer;
   fSearch.addEventListener("input", ()=>{
     clearTimeout(searchTimer);
     searchTimer = setTimeout(()=>{ state.search = fSearch.value; renderAll(); }, 180);
   });
   $("#btnReset").addEventListener("click", ()=>{
-    fDateFrom.value = minDate; fDateTo.value = maxDate; fSales.value=""; fSearch.value="";
-    state.dateFrom=minDate; state.dateTo=maxDate; state.salesperson=""; state.search="";
+    fDateFrom.value = minDate; fDateTo.value = maxDate; fSearch.value="";
+    state.dateFrom=minDate; state.dateTo=maxDate; state.search="";
+    state.salesperson = new Set(salespeople); syncSalesCheckboxes();
     state.walkin = { status:"", reason:"", search:"", sortKey:"LastContactDate", sortDir:-1, page:1, pageSize:25 };
     state.inbound = { status:"", source:"", reason:"", search:"", sortKey:"LastContactDate", sortDir:-1, page:1, pageSize:25 };
     $("#walkinSearch").value=""; $("#inboundSearch").value="";
