@@ -1144,9 +1144,15 @@ function renderChannel(key, chName, allRows){
     renderChannel(key, chName, allRows); }; });
 }
 
+function priorityRank(p){
+  if (p.visited && !p.booked) return 1;
+  if (p.appointment && !p.visited) return 2;
+  if (p.daysIdle > 14) return 3;
+  return 4;
+}
 function renderFollowUp(rows){
   const open = rows.filter(p=>p.status==="Pending"||p.status==="New")
-    .sort((a,b)=>(b.daysIdle||0)-(a.daysIdle||0));
+    .sort((a,b)=> priorityRank(a)-priorityRank(b) || (b.daysIdle||0)-(a.daysIdle||0));
   const K = [
     ["ต้องไล่ติดตาม", fmt(open.length), "ราย"],
     ["ค้าง 8–14 วัน", fmt(open.filter(p=>p.daysIdle>7&&p.daysIdle<=14).length), "เริ่มเสี่ยง"],
@@ -1337,7 +1343,7 @@ async function exportExcel(){
   /* ---------- 7. พอร์ตที่ต้องไล่ติดตาม ---------- */
   {
     const open = rows.filter(p=>p.status==="Pending"||p.status==="New")
-      .sort((a,b)=>(b.daysIdle||0)-(a.daysIdle||0));
+      .sort((a,b)=> priorityRank(a)-priorityRank(b) || (b.daysIdle||0)-(a.daysIdle||0));
     const prio = p => p.visited&&!p.booked ? "1 สูง — มา Walk In แล้วยังไม่จอง"
       : p.appointment&&!p.visited ? "2 กลาง — นัดหมายแล้วยังไม่มา"
       : p.daysIdle>14 ? "3 กลาง — ค้างนานเกิน 14 วัน" : "4 ปกติ";
