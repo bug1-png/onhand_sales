@@ -907,7 +907,7 @@ function buildPortfolio(){
       status, statusLabel: STATUS_LABEL[status],
       activityRaw: lastAct, reason: P.reason || "",
       grade: (walk && walk.grade) || pick("grade") || "",
-      booked, appointment: appt || visited || booked, visited,
+      booked, appointment: appt, visited,
       notBooked: visited && !booked,
       attempts,
       firstDate, lastDate,
@@ -1099,6 +1099,13 @@ const segPill = s => '<span class="pill" style="background:color-mix(in srgb,'+c
 const custLink = p => '<a href="#" class="cust" data-open-id="'+esc(p.id)+'">'+esc(p.name||("ID "+p.id))+'</a>';
 const scoreBar = s => { const m=scoreMeta(s);
   return '<div class="scorewrap"><div class="scorebar"><i style="width:'+s+'%;background:'+cssVar(m.cv)+'"></i></div><span class="scorenum">'+s+'</span></div>'; };
+function noteSnippet(r){
+  const full = r.feedback || "";
+  if (!full) return "";
+  const cut = full.length > 140 ? esc(full.slice(0,140)) + "…" : esc(full);
+  return '<span class="muted">'+cut+'</span>'
+    + (full.length > 140 ? ' <a href="#" class="cust" data-open-id="'+esc(r.id)+'" style="white-space:nowrap">อ่านเพิ่มเติม »</a>' : "");
+}
 
 /* ---------------- RENDER ---------------- */
 function renderAll(){ const rows = filtered(); renderOverview(rows); renderSegments(rows); renderSales(rows);
@@ -1143,7 +1150,7 @@ function renderOverview(rows){
   $("#ovDefs").innerHTML = [
     "<b>ลูกค้าในมือ (On-Hand)</b> = 1 CustomerID นับ 1 ราย ไม่นับซ้ำตามจำนวนครั้งที่ติดต่อ",
     "<b>ช่องทางที่มา</b> = ช่องทางของการติดต่อครั้งแรกสุด (Register = ลงทะเบียนเว็บไซต์ · Chat Inbound = Line/Facebook/Instagram/Contact Center · Walk In = เดินเข้าโครงการ/Booth/Visit Site โดยไม่มีลงทะเบียนก่อน)",
-    "<b>นัดหมายได้</b> = มีบันทึกกิจกรรม “นัดหมายเข้าชมโครงการ” หรือมี Walk In เกิดขึ้นจริง",
+    "<b>นัดหมายได้</b> = มีบันทึกกิจกรรมที่ระบุคำว่า “นัดหมาย” ใน ContactActivity เท่านั้น (นับเฉพาะนัดหมายจริง แยกออกจาก Walk-In ที่ลูกค้ามาเองโดยไม่มีนัด)",
     "<b>Walk In มาจริง</b> = มีแบบสอบถาม Walk-In หรือมี ContactType = Visit Site",
     "<b>จอง</b> = มีกิจกรรม “(A) Close / จองแล้ว” หรือกรอกเหตุผลที่ตัดสินใจซื้อในแบบสอบถาม",
     "<b>ไม่จอง</b> = มา Walk In แล้วแต่ยังไม่มีสถานะจอง",
@@ -1279,11 +1286,11 @@ function renderChannel(key, chName, allRows){
     {t:"พนักงานขาย", key:"salesperson", f:r=>r.salesperson},
     {t:"Grade", key:"grade", nowrap:1, f:r=>r.grade||"–"},
     {t:"Predict", key:"score", num:1, f:r=>scoreBar(r.score)},
-    {t:"นัดหมาย", key:"appointment", nowrap:1, f:r=>r.appointment?'<span class="pill ok">นัดได้</span>':'<span class="muted">–</span>'},
+    {t:"นัดหมาย", key:"appointment", nowrap:1, f:r=>r.appointment?'<span class="pill ok">นัดหมายจริง</span>':(r.visited?'<span class="pill info">Walk-In เอง</span>':'<span class="muted">–</span>')},
     {t:"Walk In", key:"walkDate", nowrap:1, f:r=>r.visited?'<span class="pill info">'+(r.walkDate||"มาแล้ว")+'</span>':'<span class="muted">–</span>'},
     {t:"จอง", key:"booked", nowrap:1, f:r=>r.booked?'<span class="pill ok">จองแล้ว</span>':(r.visited?'<span class="pill warn">ไม่จอง</span>':'<span class="muted">–</span>')},
     {t:"สถานะติดตาม", key:"status", nowrap:1, f:r=>statusPill(r.status)},
-    {t:"เหตุผล / บันทึกล่าสุด", key:"reason", f:r=>(r.reason?"<b>"+r.reason+"</b><br>":"")+'<span class="muted">'+(r.feedback||"").slice(0,140)+'</span>'},
+    {t:"เหตุผล / บันทึกล่าสุด", key:"reason", f:r=>(r.reason?"<b>"+r.reason+"</b><br>":"")+noteSnippet(r)},
     {t:"ครั้งที่ติดต่อ", key:"attempts", num:1, f:r=>fmt(r.attempts)},
     {t:"ติดต่อล่าสุด", key:"lastDate", nowrap:1, f:r=>r.lastDate||"–"},
     {t:"ค้าง (วัน)", key:"daysIdle", num:1, f:r=>r.daysIdle===""?"–":(r.daysIdle>14?'<span class="pill err">'+r.daysIdle+'</span>':r.daysIdle>7?'<span class="pill warn">'+r.daysIdle+'</span>':r.daysIdle)}
@@ -1431,6 +1438,8 @@ function openCustModal(id){
       + (p.budget||p.price ? '<div><label class="fl">งบ/ราคาที่สนใจ</label>'+esc(p.budget||p.price)+'</div>' : '')
       + (p.model ? '<div><label class="fl">แบบห้องที่สนใจ</label>'+esc(p.model)+'</div>' : '')
     + '</div>'
+    + (p.feedback ? '<div style="margin-top:14px"><label class="fl">บันทึกล่าสุดของเซลส์ (ข้อความเต็ม)</label>'
+        + '<div class="note" style="margin-top:0;white-space:pre-wrap">'+esc(p.feedback)+'</div></div>' : '')
     + '<div style="margin-top:14px"><label class="fl">คำแนะนำสำหรับพนักงานขาย</label>'
       + '<ul class="reco-list">'+(p.recommend||[]).map(r=>'<li>'+esc(r)+'</li>').join("")+'</ul></div>'
     + '<div style="margin-top:14px"><label class="fl">สรุปสำหรับเล่าให้ Head Sales ฟัง</label>'
@@ -1552,7 +1561,7 @@ async function exportExcel(){
     [
       "ลูกค้าในมือ (On-Hand) = 1 CustomerID นับ 1 ราย ไม่นับซ้ำตามจำนวนครั้งที่ติดต่อ",
       "ช่องทางที่มา = ช่องทางของการติดต่อครั้งแรกสุด (Register = ลงทะเบียนเว็บไซต์, Chat Inbound = Line/Facebook/Instagram/Contact Center, Walk In = เดินเข้าโครงการ/Booth/Visit Site โดยไม่มีลงทะเบียนก่อน)",
-      "นัดหมายได้ = มีบันทึกกิจกรรม \"นัดหมายเข้าชมโครงการ\" หรือมี Walk In เกิดขึ้นจริง",
+      "นัดหมายได้ = มีบันทึกกิจกรรมที่ระบุคำว่า \"นัดหมาย\" ใน ContactActivity เท่านั้น (นับเฉพาะนัดหมายจริง แยกออกจาก Walk-In ที่ลูกค้ามาเองโดยไม่มีนัด)",
       "Walk In มาจริง = มีแบบสอบถาม Walk-In หรือมี ContactType = Visit Site",
       "จอง = มีกิจกรรม \"(A) Close / จองแล้ว\" หรือกรอกเหตุผลที่ตัดสินใจซื้อในแบบสอบถาม Walk-In",
       "ไม่จอง = มา Walk In แล้วแต่ยังไม่มีสถานะจอง",
