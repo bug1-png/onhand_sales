@@ -1,3 +1,4 @@
+<meta charset="UTF-8">
 <title>KAVALON On-Hand Portfolio</title>
 <style>
 :root{
@@ -117,6 +118,38 @@ tfoot td{font-weight:700;background:var(--surface-2);border-top:1px solid var(--
   background:var(--text);color:var(--page);padding:11px 20px;border-radius:9px;font-size:13px;
   opacity:0;pointer-events:none;transition:.2s;z-index:99;max-width:90vw}
 #toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+/* segments */
+.segwrap{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+.segcard{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;
+  cursor:pointer;transition:.12s;text-align:left}
+.segcard:hover{border-color:var(--border-strong);transform:translateY(-1px)}
+.segcard.on{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.segcard .si{font-size:20px}
+.segcard .sl{font-size:12px;font-weight:600;color:var(--text-2);margin-top:4px}
+.segcard .sv{font-size:24px;font-weight:700;margin-top:2px}
+.segcard .sd{font-size:11.5px;color:var(--muted);margin-top:2px}
+/* score */
+.scorewrap{display:flex;align-items:center;gap:6px;min-width:96px}
+.scorebar{flex:1;height:6px;border-radius:3px;background:var(--grid);overflow:hidden}
+.scorebar>i{display:block;height:100%;border-radius:3px}
+.scorenum{font-size:12px;font-weight:700;min-width:24px;text-align:right}
+/* clickable customer link */
+a.cust{color:var(--accent-ink);font-weight:600;text-decoration:none;cursor:pointer}
+a.cust:hover{text-decoration:underline}
+/* modal */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:flex;
+  align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto}
+.modal-card{background:var(--surface);border-radius:14px;max-width:760px;width:100%;
+  box-shadow:0 12px 40px rgba(0,0,0,.3);padding:22px 24px;margin-bottom:40px}
+.modal-close{float:right;font-size:20px;background:none;border:none;color:var(--muted);cursor:pointer;line-height:1}
+.reco-list{margin:8px 0 0;padding-left:20px;font-size:13px;line-height:1.7}
+.timeline{border-left:2px solid var(--border);margin-top:10px;padding-left:16px;display:flex;flex-direction:column;gap:12px;max-height:340px;overflow-y:auto}
+.tl-item{position:relative;font-size:12.5px}
+.tl-item::before{content:"";position:absolute;left:-20px;top:4px;width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.tl-item .tl-h{font-weight:600;color:var(--text)}
+.tl-item .tl-m{color:var(--text-2);margin-top:2px;white-space:pre-wrap}
+textarea.copytxt{width:100%;min-height:96px;font:inherit;font-size:12.5px;padding:10px;border-radius:8px;
+  border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);resize:vertical}
 </style>
 <div class="wrap">
 
@@ -135,7 +168,7 @@ tfoot td{font-weight:700;background:var(--surface-2);border-top:1px solid var(--
     <p class="sub" style="margin-bottom:14px">รับไฟล์ <b>.xlsx</b> — ระบบตรวจชนิดไฟล์อัตโนมัติจากหัวตาราง (Lead / Walk-In) วางได้หลายไฟล์พร้อมกัน ทุกอย่างประมวลผลในเครื่องคุณ ไม่มีการส่งข้อมูลออกภายนอก</p>
     <div id="drop">
       <div class="big">ลากไฟล์มาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์</div>
-      <div class="muted" style="font-size:13px">เช่น <code>LEAD_1JAN-17AUG.xlsx</code> และ <code>WalkIn_KVL_1JAN-17AUG.xlsx</code></div>
+      <div class="muted" style="font-size:13px">อัปโหลดได้พร้อมกันทั้ง 3 ไฟล์ทุกสัปดาห์: <code>inbound.xlsx</code>, <code>outbound.xlsx</code>, <code>WalkIn_KVL....xlsx</code></div>
       <input type="file" id="fileInput" multiple accept=".xlsx" class="hide">
     </div>
     <div class="filelist" id="filelist"></div>
@@ -148,9 +181,10 @@ tfoot td{font-weight:700;background:var(--surface-2);border-top:1px solid var(--
     <div class="note">
       <b>ไฟล์ที่ระบบรู้จัก</b>
       <ul>
-        <li><b>Lead / Contact log</b> — ต้องมีคอลัมน์ <code>CustomerID</code>, <code>ContactChannelName</code>, <code>ContactType</code>, <code>ContactActivity</code>, <code>ContactDate</code>, <code>CreateBy</code> (อ่านทุกชีตในไฟล์)</li>
+        <li><b>Inbound / Outbound (Lead / Contact log)</b> — ไฟล์ข้อมูลขาเข้าและการติดต่อกลับของพนักงานขาย ต้องมีคอลัมน์ <code>CustomerID</code>, <code>ContactChannelName</code>, <code>ContactType</code>, <code>ContactActivity</code>, <code>ContactDate</code>, <code>CreateBy</code> (อ่านทุกชีตในไฟล์ — อัปโหลดทั้งสองไฟล์พร้อมกันได้ ระบบรวมเป็นพอร์ตเดียวกันอัตโนมัติ)</li>
         <li><b>Walk-In / แบบสอบถาม</b> — ต้องมีคอลัมน์ <code>CustomerID</code>, <code>QuestionDate</code>, <code>CreateBy</code></li>
       </ul>
+      <div style="margin-top:8px">ทุกสัปดาห์: Export ไฟล์ทั้ง 3 จากระบบ → ลากมาวางที่นี่ → กด "ประมวลผลข้อมูล" → ดูพอร์ต/กลุ่มลูกค้า/Predict ที่อัปเดตแล้ว → กด "ส่งออก Dashboard เป็น Excel" เพื่อได้ไฟล์สรุปไปอัปโหลดหรือส่งต่อให้ Head Sales</div>
     </div>
   </div>
 
@@ -173,6 +207,7 @@ tfoot td{font-weight:700;background:var(--surface-2);border-top:1px solid var(--
 
     <div class="tabs" id="tabs">
       <button class="tab on" data-t="ov">ภาพรวมผู้บริหาร</button>
+      <button class="tab" data-t="sg">กลุ่มลูกค้า &amp; Prediction</button>
       <button class="tab" data-t="sp">แยกตามพนักงานขาย</button>
       <button class="tab" data-t="wi">1. Walk In</button>
       <button class="tab" data-t="rg">2. Register / นัดหมาย</button>
@@ -205,6 +240,27 @@ tfoot td{font-weight:700;background:var(--surface-2);border-top:1px solid var(--
           <div class="tbl-wrap" style="margin-top:12px"><table id="ovReasons"></table></div>
         </div>
       </div>
+      <div class="card">
+        <h2>สรุปพร้อมเล่าให้ Head Sales ฟัง</h2>
+        <p class="sub">ประเด็นสำคัญที่สร้างอัตโนมัติจากข้อมูลที่กรองอยู่ตอนนี้ — ใช้พูดสรุปหรือคัดลอกไปวางในข้อความ/อีเมลได้ทันที</p>
+        <ul class="reco-list" id="ovTalk" style="margin-top:10px"></ul>
+        <textarea class="copytxt" id="ovTalkText" readonly style="margin-top:10px"></textarea>
+        <div class="row" style="margin-top:8px"><button id="btnCopyTalk">📋 คัดลอกสรุปทั้งหมด</button></div>
+      </div>
+    </div>
+
+    <!-- SEGMENTS & PREDICTION -->
+    <div id="pane-sg" class="hide">
+      <div class="card">
+        <h2>กลุ่มลูกค้าในพอร์ต (Segments)</h2>
+        <p class="sub">แบ่งลูกค้าในมือทั้งหมดออกเป็นกลุ่มตามสถานะ/พฤติกรรม ใช้ไล่พอร์ตทีละกลุ่มกับ Head Sales — คลิกการ์ดเพื่อกรองตาราง</p>
+        <div class="segwrap" id="segCards" style="margin-top:14px"></div>
+      </div>
+      <div class="card">
+        <div class="row"><h2 id="segTblTitle">รายชื่อลูกค้า</h2><div class="spacer"></div>
+          <span class="muted" style="font-size:12px">คะแนน Predict = โอกาสที่จะปิดการขาย (0–100) คำนวณจากพฤติกรรม/ความสด/เกรดลูกค้า · คลิกชื่อลูกค้าเพื่อดูรายละเอียดและคำแนะนำ</span></div>
+        <div class="tbl-wrap" style="margin-top:12px"><table id="segTable"></table></div>
+      </div>
     </div>
 
     <!-- BY SALESPERSON -->
@@ -234,6 +290,7 @@ tfoot td{font-weight:700;background:var(--surface-2);border-top:1px solid var(--
   </div>
 </div>
 <div id="toast"></div>
+<div id="modalBg" class="modal-bg hide"><div class="modal-card" id="modalCard"></div></div>
 <script>
 "use strict";
 /* =========================================================================
@@ -611,6 +668,91 @@ function parseActivity(a){
 const isBooked = a => /^\(A\)/.test(a||"") && /จอง/.test(a||"");
 const isAppt   = a => /นัดหมาย/.test(a||"");
 
+/* =========================================================================
+   C2. SEGMENT / PREDICT SCORE / RECOMMENDATION — ต่อยอดจากพอร์ตรายคน
+   ========================================================================= */
+const SEGMENT_LABEL = {
+  HOT:"🔥 Walk-In แล้วยังไม่จอง", APPT:"📅 นัดหมายแล้วยังไม่มา", RISK:"⚠️ เสี่ยงหลุด (ค้างนาน)",
+  WARM:"🟡 กำลังติดตามใกล้ชิด", NEW:"🆕 ลูกค้าใหม่ / รอเริ่มติดตาม", WON:"✅ จองแล้ว", LOST:"⚫ หลุด / ไม่สนใจ / PDPA"
+};
+const SEGMENT_DESC = {
+  HOT:"โอกาสปิดสูงสุดของพอร์ต — มาดูโครงการจริงแล้ว", APPT:"มีนัดแล้ว ต้องยืนยัน/ตามให้มาจริง",
+  RISK:"ไม่ได้ติดต่อนานเกิน 14 วัน อาจเงียบหาย/ไปที่อื่น", WARM:"ติดต่อถี่ หรือเพิ่งคุยไปไม่นาน มีสัญญาณสนใจ",
+  NEW:"ยังไม่มีการติดตามหรือเพิ่งเข้ามาไม่เกิน 14 วัน", WON:"ปิดการขายแล้ว", LOST:"ไม่สนใจแล้ว / ขอไม่ให้ติดต่อ"
+};
+const SEGMENT_ORDER = ["HOT","APPT","RISK","WARM","NEW","WON","LOST"];
+const SEGMENT_VAR = { HOT:"--critical", APPT:"--warning", RISK:"--warning", WARM:"--accent", NEW:"--new", WON:"--good", LOST:"--src-other" };
+
+function segmentOf(p){
+  if (p.status === "Lost" || p.status === "PDPA") return "LOST";
+  if (p.booked) return "WON";
+  if (p.visited) return "HOT";
+  if (p.appointment) return "APPT";
+  const idle = p.daysIdle === "" ? 0 : p.daysIdle;
+  if (idle > 14) return "RISK";
+  if ((p.attempts||0) >= 2 || idle <= 3) return "WARM";
+  return "NEW";
+}
+
+/* ---- Predict score : โอกาสปิดการขาย 0-100 (rule-based, ไม่ใช่ ML) ---- */
+function scoreOf(p){
+  if (p.status === "Lost" || p.status === "PDPA") return 2;
+  if (p.booked) return 100;
+  let s = 20;
+  if (p.visited) s += 35;
+  if (p.appointment) s += 12;
+  const gr = (p.grade||"").toUpperCase();
+  if (gr === "A") s += 15; else if (gr === "B") s += 8; else if (gr === "C") s += 3;
+  s += Math.min(15, (p.attempts||0) * 3);
+  const idle = p.daysIdle === "" ? null : p.daysIdle;
+  if (idle !== null){
+    if (idle <= 3) s += 12; else if (idle <= 7) s += 6;
+    else if (idle <= 14) s += 0; else if (idle <= 30) s -= 10; else s -= 22;
+  }
+  if (p.price || p.budget) s += 4;
+  if (p.buyReason) s += 6;
+  return Math.max(1, Math.min(99, Math.round(s)));
+}
+function scoreMeta(s){
+  if (s >= 70) return { label:"สูง", cv:"--good" };
+  if (s >= 40) return { label:"ปานกลาง", cv:"--warning" };
+  return { label:"ต่ำ", cv:"--critical" };
+}
+
+/* ---- คำแนะนำรายบุคคล : กติกาจากพฤติกรรม/ข้อมูลที่มี ---- */
+function recommendFor(p){
+  const R = [];
+  const idle = p.daysIdle === "" ? null : p.daysIdle;
+  if (p.status === "Lost" || p.status === "PDPA"){
+    R.push("ลูกค้าหลุด/ปฏิเสธการติดต่อแล้ว — ไม่ต้องติดตามเพิ่ม เว้นแต่มีโปรโมชันใหม่ที่ตรงเหตุผลเดิม");
+    if (p.reason) R.push("เหตุผลล่าสุด: " + p.reason);
+    return R;
+  }
+  if (p.booked){
+    R.push("ปิดการขายแล้ว — ติดตามเอกสาร/นัดโอนกรรมสิทธิ์ และขอ referral ต่อ");
+    return R;
+  }
+  if (p.visited){
+    R.push(idle !== null && idle > 14
+      ? "🔥 ด่วน: มา Walk-In แล้ว " + idle + " วันแต่ยังไม่ปิด ควรโทรติดตามภายในวันนี้ก่อนลูกค้าเปลี่ยนใจ"
+      : "มา Walk-In แล้วยังไม่จอง — เป็นโอกาสปิดสูงสุดของพอร์ต ควรติดตามใกล้ชิด");
+    if (p.noBuyReason) R.push("เหตุผลที่ยังไม่จอง: " + p.noBuyReason);
+    else if (p.reason) R.push("บันทึกล่าสุด: " + p.reason);
+    if (p.budget) R.push("งบประมาณลูกค้า: " + p.budget + " — เทียบกับยูนิต/โปรโมชันที่พอดี");
+  } else if (p.appointment){
+    R.push("นัดหมายเข้าชมโครงการแล้วแต่ยังไม่มา — โทรยืนยันนัด หรือเลื่อนนัดล่วงหน้าก่อนถึงวัน");
+  } else if (idle !== null && idle > 14){
+    R.push("ค้างติดตาม " + idle + " วัน — เสี่ยงหลุด ควรติดต่อกลับภายใน 1–2 วัน ก่อนลูกค้าตัดสินใจที่อื่น");
+    if (p.reason) R.push("บันทึกล่าสุด: " + p.reason);
+  } else if ((p.attempts||0) === 0){
+    R.push("ยังไม่เคยมีบันทึกกิจกรรมติดตาม — ควรโทรทักครั้งแรกภายใน 24 ชม. เพื่อรักษาอัตราการตอบกลับ");
+  } else {
+    R.push("อยู่ระหว่างติดตามปกติ — นัดโทร/ส่งข้อมูลเพิ่มเติมตามรอบที่วางไว้");
+  }
+  if ((p.grade||"").toUpperCase() === "A") R.push("Grade A — ศักยภาพสูง ควรให้ความสำคัญเป็นลำดับต้น");
+  return R.slice(0,4);
+}
+
 /* ---- โครงข้อมูลรวม ---- */
 const RAW = { leadRows:[], walkRows:[], files:[] };
 let PORT = [];      // ลูกค้ารายคน
@@ -783,6 +925,10 @@ function buildPortfolio(){
       media: walk ? walk.media : "",
       feedback
     });
+    { const rec = PORT[PORT.length-1];
+      rec.segment = segmentOf(rec);
+      rec.score = scoreOf(rec);
+      rec.recommend = recommendFor(rec); }
 
     c.leads.forEach(r=>{
       if (!r.act && !r.det) return;
@@ -917,7 +1063,7 @@ $("#tabs").onclick = e => {
   const b = e.target.closest(".tab"); if (!b) return;
   state.tab = b.dataset.t;
   document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("on", x===b));
-  ["ov","sp","wi","rg","ch","fu"].forEach(k=>$("#pane-"+k).classList.toggle("hide", k!==state.tab));
+  ["ov","sg","sp","wi","rg","ch","fu"].forEach(k=>$("#pane-"+k).classList.toggle("hide", k!==state.tab));
 };
 
 /* ---------------- ตัวช่วยคำนวณ ---------------- */
@@ -949,9 +1095,13 @@ function tableHTML(cols, rows, opts){
 }
 const statusPill = s => '<span class="pill" style="background:color-mix(in srgb,'+cssVar(STATUS_VAR[s])+' 16%, transparent);color:'+cssVar(STATUS_VAR[s])+'">'+STATUS_LABEL[s]+'</span>';
 const srcPill = s => '<span class="pill" style="background:color-mix(in srgb,'+cssVar(SRC_VAR[s]||"--src-other")+' 16%, transparent);color:'+cssVar(SRC_VAR[s]||"--src-other")+'">'+s+'</span>';
+const segPill = s => '<span class="pill" style="background:color-mix(in srgb,'+cssVar(SEGMENT_VAR[s])+' 16%, transparent);color:'+cssVar(SEGMENT_VAR[s])+'">'+SEGMENT_LABEL[s]+'</span>';
+const custLink = p => '<a href="#" class="cust" data-open-id="'+esc(p.id)+'">'+esc(p.name||("ID "+p.id))+'</a>';
+const scoreBar = s => { const m=scoreMeta(s);
+  return '<div class="scorewrap"><div class="scorebar"><i style="width:'+s+'%;background:'+cssVar(m.cv)+'"></i></div><span class="scorenum">'+s+'</span></div>'; };
 
 /* ---------------- RENDER ---------------- */
-function renderAll(){ const rows = filtered(); renderOverview(rows); renderSales(rows);
+function renderAll(){ const rows = filtered(); renderOverview(rows); renderSegments(rows); renderSales(rows);
   renderChannel("wi", CH_WALKIN, rows); renderChannel("rg", CH_REGISTER, rows);
   renderChannel("ch", CH_CHAT, rows); renderFollowUp(rows); }
 
@@ -1014,7 +1164,36 @@ function renderOverview(rows){
   $("#ovReasons").innerHTML = tableHTML(
     [{t:"เหตุผล",f:r=>r[0]},{t:"ราย",num:1,f:r=>fmt(r[1])},{t:"สัดส่วน",num:1,f:r=>pctS(r[1],rows.length)}],
     top);
+
+  renderTalkingPoints(rows, F, sc, tot);
 }
+
+function renderTalkingPoints(rows, F, sc, tot){
+  const bySeg = {}; SEGMENT_ORDER.forEach(s=>bySeg[s]=rows.filter(p=>p.segment===s));
+  const spMap = new Map();
+  rows.forEach(p=>{ if(!spMap.has(p.salesperson)) spMap.set(p.salesperson,[]); spMap.get(p.salesperson).push(p); });
+  let bestSp=null, worstSp=null;
+  spMap.forEach((rs,sp)=>{
+    if (sp===UNASSIGNED || rs.length<3) return;
+    const conv = pct(rs.filter(p=>p.booked).length, rs.length);
+    const idle = rs.filter(p=>(p.status==="Pending"||p.status==="New")&&p.daysIdle>14).length;
+    if (!bestSp || conv>bestSp.conv) bestSp = {sp,conv,n:rs.length};
+    if (!worstSp || idle>worstSp.idle) worstSp = {sp,idle,n:rs.length};
+  });
+  const scope = state.sp==="__all" ? "ทั้งทีม" : "พอร์ตของ "+state.sp;
+  const L = [];
+  L.push("พอร์ต "+scope+" ช่วง "+state.from+" ถึง "+state.to+" มีลูกค้าในมือทั้งหมด "+fmt(rows.length)+" ราย ปิดการขายแล้ว "+fmt(F.booked)+" ราย ("+pctS(F.booked,F.leads)+")");
+  if (bySeg.HOT.length) L.push("🔥 กลุ่มโอกาสปิดสูงสุด (Walk-In แล้วยังไม่จอง) มี "+fmt(bySeg.HOT.length)+" ราย ควรไล่ทวนเป็นกลุ่มแรกวันนี้");
+  if (bySeg.RISK.length) L.push("⚠️ กลุ่มเสี่ยงหลุด (ค้างติดตามเกิน 14 วัน) มี "+fmt(bySeg.RISK.length)+" ราย เสี่ยงเสียโอกาสถ้าไม่รีบติดต่อ");
+  if (bySeg.APPT.length) L.push("📅 มีนัดหมายแล้วแต่ยังไม่มา Walk-In "+fmt(bySeg.APPT.length)+" ราย ต้องยืนยันนัดล่วงหน้า");
+  if (bySeg.NEW.length) L.push("🆕 ลูกค้าใหม่ยังไม่เริ่มติดตาม "+fmt(bySeg.NEW.length)+" ราย");
+  if (F.lost) L.push("⚫ หลุด/ไม่สนใจสะสม "+fmt(F.lost)+" ราย ("+pctS(F.lost,F.leads)+" ของพอร์ต)");
+  if (bestSp) L.push("พนักงานขายที่ปิดการขายได้ดีที่สุด: "+bestSp.sp+" ปิด "+bestSp.conv.toFixed(1)+"% จาก "+bestSp.n+" ราย");
+  if (worstSp && worstSp.idle>0) L.push("ควรช่วยเหลือเพิ่มเติม: "+worstSp.sp+" มีลูกค้าค้างติดตามนาน "+worstSp.idle+" ราย");
+  $("#ovTalk").innerHTML = L.map(s=>"<li>"+s+"</li>").join("");
+  $("#ovTalkText").value = "สรุปพอร์ตลูกค้า ON HAND — "+new Date().toLocaleDateString("th-TH")+"\n\n"+L.map(s=>"• "+s.replace(/<[^>]+>/g,"")).join("\n");
+}
+$("#btnCopyTalk").onclick = () => copyText($("#ovTalkText").value, "คัดลอกสรุปสำหรับ Head Sales แล้ว");
 
 function renderSales(rows){
   const map = new Map();
@@ -1094,11 +1273,12 @@ function renderChannel(key, chName, allRows){
 
   const cols = [
     {t:"CustomerID", key:"id", nowrap:1, f:r=>r.id},
-    {t:"ชื่อลูกค้า", key:"name", f:r=>r.name||"–"},
+    {t:"ชื่อลูกค้า", key:"name", f:r=>custLink(r)},
     {t:"เบอร์โทร", key:"mobile", nowrap:1, f:r=>r.mobile||"–"},
     {t:"ช่องทาง", key:"source", nowrap:1, f:r=>srcPill(r.source)},
     {t:"พนักงานขาย", key:"salesperson", f:r=>r.salesperson},
     {t:"Grade", key:"grade", nowrap:1, f:r=>r.grade||"–"},
+    {t:"Predict", key:"score", num:1, f:r=>scoreBar(r.score)},
     {t:"นัดหมาย", key:"appointment", nowrap:1, f:r=>r.appointment?'<span class="pill ok">นัดได้</span>':'<span class="muted">–</span>'},
     {t:"Walk In", key:"walkDate", nowrap:1, f:r=>r.visited?'<span class="pill info">'+(r.walkDate||"มาแล้ว")+'</span>':'<span class="muted">–</span>'},
     {t:"จอง", key:"booked", nowrap:1, f:r=>r.booked?'<span class="pill ok">จองแล้ว</span>':(r.visited?'<span class="pill warn">ไม่จอง</span>':'<span class="muted">–</span>')},
@@ -1166,10 +1346,11 @@ function renderFollowUp(rows){
         : r.appointment&&!r.visited ? '<span class="pill warn">กลาง — นัดแล้วยังไม่มา</span>'
         : r.daysIdle>14 ? '<span class="pill warn">กลาง — ค้างนาน</span>' : '<span class="pill new">ปกติ</span>'},
     {t:"CustomerID", nowrap:1, f:r=>r.id},
-    {t:"ชื่อลูกค้า", f:r=>r.name||"–"},
+    {t:"ชื่อลูกค้า", f:r=>custLink(r)},
     {t:"เบอร์โทร", nowrap:1, f:r=>r.mobile||"–"},
     {t:"ช่องทาง", nowrap:1, f:r=>srcPill(r.source)},
     {t:"พนักงานขาย", f:r=>r.salesperson},
+    {t:"Predict", num:1, f:r=>scoreBar(r.score)},
     {t:"สถานะ", nowrap:1, f:r=>statusPill(r.status)},
     {t:"เหตุผลล่าสุด", f:r=>r.reason||"–"},
     {t:"ครั้งที่ติดต่อ", num:1, f:r=>fmt(r.attempts)},
@@ -1177,6 +1358,114 @@ function renderFollowUp(rows){
     {t:"ค้าง (วัน)", num:1, f:r=>r.daysIdle===""?"–":(r.daysIdle>14?'<span class="pill err">'+r.daysIdle+'</span>':r.daysIdle>7?'<span class="pill warn">'+r.daysIdle+'</span>':r.daysIdle)}
   ];
   $("#fuTable").innerHTML = tableHTML(cols, open);
+}
+
+/* ---------------- SEGMENTS & PREDICTION ---------------- */
+let segFilter = "__all";
+function renderSegments(rows){
+  const bySeg = {}; SEGMENT_ORDER.forEach(s=>bySeg[s]=[]);
+  rows.forEach(p=>{ (bySeg[p.segment] = bySeg[p.segment]||[]).push(p); });
+  if (segFilter!=="__all" && !SEGMENT_ORDER.includes(segFilter)) segFilter = "__all";
+
+  $("#segCards").innerHTML = '<button class="segcard'+(segFilter==="__all"?" on":"")+'" data-seg="__all">'
+      + '<div class="si">📋</div><div class="sl">ทั้งหมด</div><div class="sv">'+fmt(rows.length)+'</div>'
+      + '<div class="sd">ลูกค้าในมือทุกกลุ่ม</div></button>'
+    + SEGMENT_ORDER.map(s=>{
+        const rs = bySeg[s]||[]; if (!rs.length) return "";
+        const avg = rs.length ? Math.round(rs.reduce((a,p)=>a+p.score,0)/rs.length) : 0;
+        return '<button class="segcard'+(segFilter===s?" on":"")+'" data-seg="'+s+'">'
+          + '<div class="si">'+SEGMENT_LABEL[s].split(" ")[0]+'</div>'
+          + '<div class="sl">'+SEGMENT_LABEL[s].replace(/^\S+\s/,"")+'</div>'
+          + '<div class="sv">'+fmt(rs.length)+'</div>'
+          + '<div class="sd">'+SEGMENT_DESC[s]+' · คะแนนเฉลี่ย '+avg+'</div></button>';
+      }).join("");
+  $("#segCards").querySelectorAll("[data-seg]").forEach(b=>b.onclick=()=>{ segFilter=b.dataset.seg; renderSegments(rows); });
+
+  const list = (segFilter==="__all" ? rows : (bySeg[segFilter]||[])).slice().sort((a,b)=>b.score-a.score);
+  $("#segTblTitle").textContent = (segFilter==="__all" ? "รายชื่อลูกค้าทั้งหมด" : SEGMENT_LABEL[segFilter])
+    + " (" + fmt(list.length) + " ราย)";
+  const cols = [
+    {t:"CustomerID", f:r=>r.id, nowrap:1},
+    {t:"ชื่อลูกค้า", f:r=>custLink(r)},
+    {t:"เบอร์โทร", f:r=>r.mobile||"–", nowrap:1},
+    {t:"พนักงานขาย", f:r=>r.salesperson},
+    {t:"Grade", f:r=>r.grade||"–", nowrap:1},
+    {t:"กลุ่ม", f:r=>segPill(r.segment), nowrap:1},
+    {t:"Predict", f:r=>scoreBar(r.score), num:1},
+    {t:"ค้าง (วัน)", f:r=>r.daysIdle===""?"–":r.daysIdle, num:1, nowrap:1},
+    {t:"คำแนะนำเบื้องต้น", f:r=>(r.recommend&&r.recommend[0])||"–"}
+  ];
+  $("#segTable").innerHTML = tableHTML(cols, list.slice(0,500));
+}
+
+/* ---------------- MODAL : รายละเอียดลูกค้ารายบุคคล ---------------- */
+function buildCustSummary(p){
+  const lines = [];
+  lines.push("ลูกค้า: "+(p.name||("ID "+p.id))+" ("+p.id+")"+(p.mobile?" · โทร "+p.mobile:""));
+  lines.push("กลุ่ม: "+SEGMENT_LABEL[p.segment]+" · คะแนน Predict "+p.score+"/100 ("+scoreMeta(p.score).label+") · พนักงานขาย: "+p.salesperson);
+  lines.push("ช่องทางที่มา: "+p.channel+" ("+p.source+") · สถานะ: "+p.statusLabel+(p.daysIdle!==""?(" · ค้าง "+p.daysIdle+" วัน"):""));
+  if (p.grade) lines.push("Grade: "+p.grade);
+  if (p.budget||p.price) lines.push("งบ/ราคาที่สนใจ: "+(p.budget||p.price));
+  if (p.model) lines.push("แบบห้องที่สนใจ: "+p.model);
+  lines.push("คำแนะนำ: "+(p.recommend||[]).join(" / "));
+  if (p.feedback) lines.push("บันทึกล่าสุด: "+String(p.feedback).slice(0,300));
+  return lines.join("\n");
+}
+function openCustModal(id){
+  const p = PORT.find(x=>String(x.id)===String(id)); if (!p) return;
+  const m = scoreMeta(p.score);
+  const acts = ACTS.filter(a=>String(a.id)===String(id));
+  $("#modalCard").innerHTML =
+    '<button class="modal-close" id="mClose">&times;</button>'
+    + '<h2>'+esc(p.name||("ID "+p.id))+'</h2>'
+    + '<p class="sub">CustomerID '+esc(p.id)+(p.mobile?' · '+esc(p.mobile):'')+(p.project?' · '+esc(p.project):'')+'</p>'
+    + '<div class="row" style="margin-top:10px">'+segPill(p.segment)+statusPill(p.status)
+      + '<span class="pill" style="background:color-mix(in srgb,'+cssVar(m.cv)+' 16%, transparent);color:'+cssVar(m.cv)+'">Predict '+p.score+'/100 — '+m.label+'</span>'
+      + (p.grade?'<span class="pill new">Grade '+esc(p.grade)+'</span>':'')
+      + '</div>'
+    + '<div class="grid2" style="margin-top:14px">'
+      + '<div><label class="fl">พนักงานขายเจ้าของพอร์ต</label>'+esc(p.salesperson)+'</div>'
+      + '<div><label class="fl">ช่องทางที่มา</label>'+esc(p.channel)+' ('+esc(p.source)+')</div>'
+      + '<div><label class="fl">ติดต่อล่าสุด</label>'+esc(p.lastDate||"–")+(p.daysIdle!==""?' · ค้าง '+p.daysIdle+' วัน':'')+'</div>'
+      + '<div><label class="fl">ครั้งที่ติดต่อ</label>'+fmt(p.attempts)+' ครั้ง</div>'
+      + (p.budget||p.price ? '<div><label class="fl">งบ/ราคาที่สนใจ</label>'+esc(p.budget||p.price)+'</div>' : '')
+      + (p.model ? '<div><label class="fl">แบบห้องที่สนใจ</label>'+esc(p.model)+'</div>' : '')
+    + '</div>'
+    + '<div style="margin-top:14px"><label class="fl">คำแนะนำสำหรับพนักงานขาย</label>'
+      + '<ul class="reco-list">'+(p.recommend||[]).map(r=>'<li>'+esc(r)+'</li>').join("")+'</ul></div>'
+    + '<div style="margin-top:14px"><label class="fl">สรุปสำหรับเล่าให้ Head Sales ฟัง</label>'
+      + '<textarea class="copytxt" id="mSummary" readonly>'+esc(buildCustSummary(p))+'</textarea>'
+      + '<div class="row" style="margin-top:6px"><button id="mCopy">📋 คัดลอกสรุปลูกค้ารายนี้</button></div></div>'
+    + '<div style="margin-top:14px"><label class="fl">ประวัติการติดต่อทั้งหมด ('+acts.length+' ครั้ง)</label>'
+      + '<div class="timeline">'
+      + (acts.length ? acts.map(a=>'<div class="tl-item"><div class="tl-h">'+esc(a.date)+' '+esc(a.time)+' · '+esc(a.chan||a.channel)+' · '+esc(a.by||"–")+'</div>'
+          + '<div class="tl-m">'+esc(a.act||"")+(a.det?"\n"+esc(a.det):"")+'</div></div>').join("")
+        : '<div class="muted" style="font-size:12.5px">ไม่มีประวัติกิจกรรมแยกรายครั้ง (ข้อมูลมาจากแบบสอบถาม Walk-In เท่านั้น)</div>')
+      + '</div></div>';
+  $("#modalBg").classList.remove("hide");
+  $("#mClose").onclick = closeCustModal;
+  $("#mCopy").onclick = () => copyText($("#mSummary").value, "คัดลอกสรุปลูกค้าแล้ว");
+}
+function closeCustModal(){ $("#modalBg").classList.add("hide"); }
+$("#modalBg").addEventListener("click", e=>{ if (e.target.id==="modalBg") closeCustModal(); });
+document.addEventListener("keydown", e=>{ if (e.key==="Escape") closeCustModal(); });
+document.addEventListener("click", e=>{
+  const a = e.target.closest("[data-open-id]"); if (!a) return;
+  e.preventDefault(); openCustModal(a.dataset.openId);
+});
+
+function copyText(txt, okMsg){
+  const done = ()=>toast(okMsg||"คัดลอกแล้ว");
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(done).catch(()=>fallbackCopy(txt,done));
+  } else fallbackCopy(txt, done);
+}
+function fallbackCopy(txt, done){
+  const ta = document.createElement("textarea");
+  ta.value = txt; ta.style.position="fixed"; ta.style.opacity="0";
+  document.body.appendChild(ta); ta.focus(); ta.select();
+  try { document.execCommand("copy"); done(); } catch(e){ toast("คัดลอกไม่สำเร็จ — กรุณาเลือกข้อความแล้วคัดลอกเอง"); }
+  ta.remove();
 }
 </script>
 <script>
@@ -1274,6 +1563,30 @@ async function exportExcel(){
     specs.push({ name:"1 สรุปผู้บริหาร", cols:[46,16,14,16,14,18,12,12,15,14,12], rows:R });
   }
 
+  /* ---------- 1b. กลุ่มลูกค้า (Segments) & Predict ---------- */
+  {
+    const R = [];
+    R.push([{v:"กลุ่มลูกค้า (Segments) และคะแนน Predict — สำหรับไล่พอร์ตกับ Head Sales", s:S_TITLE}]);
+    R.push([]);
+    R.push([H("กลุ่มลูกค้า"),H("จำนวนราย"),H("สัดส่วน"),H("คะแนน Predict เฉลี่ย"),H("คำอธิบาย")]);
+    SEGMENT_ORDER.forEach(s=>{
+      const rs = rows.filter(p=>p.segment===s); if (!rs.length) return;
+      const avg = Math.round(rs.reduce((a,p)=>a+p.score,0)/rs.length);
+      R.push([SEGMENT_LABEL[s], N(rs.length), P(rs.length,rows.length), N(avg), SEGMENT_DESC[s]]);
+    });
+    R.push([]);
+    R.push([{v:"รายชื่อลูกค้าเรียงตามคะแนน Predict (โอกาสปิดสูงสุดก่อน)", s:S_TITLE}]);
+    R.push([H("CustomerID"),H("ชื่อลูกค้า"),H("เบอร์โทร"),H("พนักงานขาย"),H("Grade"),
+      H("กลุ่มลูกค้า"),H("Predict Score"),H("ค้าง (วัน)"),H("คำแนะนำ")]);
+    const hdrRow = R.length; // แถวหัวตารางที่สอง (1-based) — ใช้ตั้ง freeze/filter
+    rows.slice().sort((a,b)=>b.score-a.score).forEach(p=>{
+      R.push([p.id, p.name, p.mobile, p.salesperson, p.grade, SEGMENT_LABEL[p.segment],
+        N(p.score), (p.daysIdle===""?"":N(p.daysIdle)), (p.recommend||[]).join(" | ")]);
+    });
+    specs.push({ name:"1b กลุ่มลูกค้า (Segments)", cols:[12,22,15,22,8,26,12,10,60], rows:R,
+      freeze:"A"+(hdrRow+1), filterRow:hdrRow });
+  }
+
   /* ---------- 2. แยกตามพนักงานขาย ---------- */
   {
     const map = new Map();
@@ -1313,22 +1626,24 @@ async function exportExcel(){
   const detailCols = [
     {t:"CustomerID",w:12},{t:"ชื่อลูกค้า",w:24},{t:"เบอร์โทร",w:15},{t:"โครงการ",w:14},
     {t:"ช่องทางที่มา",w:14},{t:"ช่องทางย่อย",w:14},{t:"พนักงานขาย",w:24},{t:"Grade",w:8},
+    {t:"กลุ่มลูกค้า",w:26},{t:"Predict Score",w:12},
     {t:"นัดหมายได้",w:11},{t:"Walk In จริง",w:11},{t:"วันที่ Walk In",w:13},{t:"จอง",w:10},
     {t:"สถานะการติดตาม",w:20},{t:"หมวดเหตุผล",w:30},{t:"ครั้งที่ติดต่อ",w:11},
     {t:"ติดต่อครั้งแรก",w:13},{t:"ติดต่อล่าสุด",w:13},{t:"ค้าง (วัน)",w:10},
     {t:"FollowUp",w:10},{t:"งบ/ราคาที่สนใจ",w:20},{t:"แบบห้องที่สนใจ",w:22},
     {t:"วัตถุประสงค์",w:16},{t:"ระยะเวลาตัดสินใจ",w:16},{t:"สื่อที่รู้จักโครงการ",w:22},
     {t:"utm_source",w:16},{t:"Line ID",w:16},{t:"เหตุผลที่ตัดสินใจซื้อ",w:30},
-    {t:"เหตุผลที่ยังไม่จอง",w:30},{t:"บันทึกล่าสุดของเซลส์",w:60}
+    {t:"เหตุผลที่ยังไม่จอง",w:30},{t:"คำแนะนำ (Predict)",w:50},{t:"บันทึกล่าสุดของเซลส์",w:60}
   ];
   const detailRow = p => [
     p.id, p.name, p.mobile, p.project, p.channel, p.source, p.salesperson, p.grade,
+    SEGMENT_LABEL[p.segment], N(p.score),
     p.appointment?"ใช่":"", p.visited?"ใช่":"", p.walkDate,
     p.booked?{v:"จองแล้ว",s:S_GOOD}:(p.visited?{v:"ไม่จอง",s:S_WARN}:""),
     p.statusLabel, p.reason, N(p.attempts), p.firstDate, p.lastDate,
     (p.daysIdle===""?"":N(p.daysIdle)), p.followUp,
     p.price||p.budget, p.model, p.purpose, p.decideTime, p.media, p.utm, p.lineId,
-    p.buyReason, p.noBuyReason||p.reason, p.feedback
+    p.buyReason, p.noBuyReason||p.reason, (p.recommend||[]).join(" | "), p.feedback
   ];
   [["3 Walk In", CH_WALKIN],["4 Register", CH_REGISTER],["5 Chat Inbound", CH_CHAT]].forEach(([nm,ch])=>{
     const rs = rows.filter(p=>p.channel===ch)
@@ -1350,13 +1665,17 @@ async function exportExcel(){
     const cols = [
       {t:"ลำดับความสำคัญ",w:32},{t:"พนักงานขาย",w:24},{t:"CustomerID",w:12},{t:"ชื่อลูกค้า",w:24},
       {t:"เบอร์โทร",w:15},{t:"ช่องทางที่มา",w:14},{t:"ช่องทางย่อย",w:14},{t:"สถานะ",w:18},
+      {t:"กลุ่มลูกค้า",w:26},{t:"Predict Score",w:12},
       {t:"เหตุผลล่าสุด",w:30},{t:"ครั้งที่ติดต่อ",w:11},{t:"ติดต่อล่าสุด",w:13},{t:"ค้าง (วัน)",w:10},
-      {t:"บันทึกล่าสุดของเซลส์",w:60},{t:"ACTION ถัดไป (กรอกเอง)",w:30},{t:"กำหนดติดตาม (กรอกเอง)",w:18}
+      {t:"คำแนะนำ (Predict)",w:50},{t:"บันทึกล่าสุดของเซลส์",w:60},
+      {t:"ACTION ถัดไป (กรอกเอง)",w:30},{t:"กำหนดติดตาม (กรอกเอง)",w:18}
     ];
     specs.push(sheetFromRows("7 พอร์ตต้องไล่ติดตาม", cols, open, p=>[
       { v:prio(p), s: p.visited&&!p.booked ? S_BAD : (p.daysIdle>14 ? S_WARN : 0) },
       p.salesperson, p.id, p.name, p.mobile, p.channel, p.source, p.statusLabel,
-      p.reason, N(p.attempts), p.lastDate, (p.daysIdle===""?"":N(p.daysIdle)), p.feedback, "", ""
+      SEGMENT_LABEL[p.segment], N(p.score),
+      p.reason, N(p.attempts), p.lastDate, (p.daysIdle===""?"":N(p.daysIdle)),
+      (p.recommend||[]).join(" | "), p.feedback, "", ""
     ]));
   }
 
