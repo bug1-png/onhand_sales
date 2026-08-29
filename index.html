@@ -213,6 +213,7 @@ textarea.copytxt{width:100%;min-height:96px;font:inherit;font-size:12.5px;paddin
       <button class="tab" data-t="rg">2. Register / นัดหมาย</button>
       <button class="tab" data-t="ch">3. Chat Inbound (Line/FB)</button>
       <button class="tab" data-t="fu">พอร์ตต้องไล่ติดตาม</button>
+      <button class="tab" data-t="io">Inbound → Outbound Feedback</button>
     </div>
 
     <!-- OVERVIEW -->
@@ -284,6 +285,28 @@ textarea.copytxt{width:100%;min-height:96px;font:inherit;font-size:12.5px;paddin
         <p class="sub">ลูกค้าที่ยังไม่ปิดการขายและยังไม่หลุด เรียงตามจำนวนวันที่ไม่ได้ติดต่อมากที่สุด</p>
         <div class="kpis" id="fuKpi" style="margin-top:14px"></div>
         <div class="tbl-wrap" style="margin-top:14px"><table id="fuTable"></table></div>
+      </div>
+    </div>
+
+    <!-- INBOUND -> OUTBOUND FEEDBACK -->
+    <div id="pane-io" class="hide">
+      <div class="card">
+        <h2>ยึด Inbound เป็นหลัก แล้วดึง Feedback จาก Outbound</h2>
+        <p class="sub">เลือกช่วงวันที่ตาม <b>วันที่ติดต่อเข้า (Inbound)</b> — ระบบจะดึงประวัติการโทรออก (Outbound) ของลูกค้ากลุ่มนี้มาให้ทั้งหมด
+          <b>โดยไม่จำกัดว่าการโทรออกต้องอยู่ในช่วงวันที่เดียวกัน</b> เพราะเซลส์มักติดตามลูกค้าต่อเนื่องนอกช่วงไฟล์ที่ export มา</p>
+        <div class="row" style="margin-top:12px">
+          <div><label class="fl">ตั้งแต่วันที่ (Inbound)</label><input type="date" id="ioFrom"></div>
+          <div><label class="fl">ถึงวันที่ (Inbound)</label><input type="date" id="ioTo"></div>
+          <div><label class="fl">ประเภท Inbound</label><select id="ioType" style="min-width:180px"></select></div>
+          <div><label class="fl">&nbsp;</label><button id="ioReset">รีเซ็ต</button></div>
+          <div><label class="fl">&nbsp;</label><button class="good" id="ioExcel">⬇ ส่งออกรายงานนี้เป็น Excel</button></div>
+        </div>
+        <div class="kpis" id="ioKpi" style="margin-top:14px"></div>
+      </div>
+      <div class="card">
+        <h2 id="ioTblTitle">รายชื่อลูกค้า Inbound ในช่วงที่เลือก</h2>
+        <p class="sub">คลิกชื่อลูกค้าเพื่อดูประวัติการติดต่อครบทุกครั้ง (ทั้ง Inbound และ Outbound)</p>
+        <div class="tbl-wrap" style="margin-top:12px"><table id="ioTable"></table></div>
       </div>
     </div>
 
@@ -645,7 +668,9 @@ function channelOf(contactType, channelName){
   if (/instagram|^ig/.test(t)) return [CH_CHAT,"Instagram"];
   if (/contact ?center/.test(t) || /contact ?center/.test(c)) return [CH_CHAT,"Contact Center"];
   if (/^chat|^inbound/.test(t) || /^inbound/.test(c)) return [CH_CHAT,"Chat อื่น ๆ"];
-  if (/visit ?site|walk ?in|booth/.test(t)) return [CH_WALKIN,"Walk In"];
+  // หมายเหตุ: ContactType "Visit Site"/"Booth" ไม่ถูกจับเป็น Walk In ตรงนี้โดยเจตนา —
+  // เป็นแค่บันทึกกิจกรรมของเซลส์ ไม่ใช่หลักฐานว่ามีแบบสอบถาม Walk-In จริง (ดู c.walks.length ใน buildPortfolio แทน)
+  // เดิมเคยจับตรงนี้แล้วทำให้ยอด Walk In เพี้ยนจากไฟล์แบบสอบถามจริง (พบจากการตรวจสอบ 2026-08-29)
   return [CH_OTHER, contactType || channelName || "ไม่ระบุ"];
 }
 
@@ -667,6 +692,19 @@ function parseActivity(a){
 }
 const isBooked = a => /^\(A\)/.test(a||"") && /จอง/.test(a||"");
 const isAppt   = a => /นัดหมาย/.test(a||"");
+
+/* ---- ดักจับ "จองแล้ว" จากข้อความอิสระ (ContactDetail / ContactLog_Detail) ----
+   ใช้เสริมกรณีเซลส์เขียนเล่าว่าปิดการขายในช่องบันทึกอิสระ แต่ไม่ได้กดรหัสกิจกรรม (A)
+   หรือกรอกแบบสอบถาม Walk-In ผิดช่อง — ต้องกันคำปฏิเสธ (ยังไม่จอง/ไม่จอง) ก่อนเสมอ
+   เพื่อไม่ให้จับพลาดเป็น "จองแล้ว" ตอนที่ลูกค้ายังไม่จอง */
+function bookedTextSignal(t){
+  t = (t||"").trim(); if (!t) return false;
+  // ต้องมีคำว่า "จอง" ตามด้วย "แล้ว"/"เรียบร้อย" ติดกันเท่านั้น (บ่งชี้ว่าจบสมบูรณ์แล้วจริง)
+  // เจตนาตัดคำอย่าง "ตัดสินใจจอง" เปล่าๆ ออก เพราะดันจับ "ยังไม่ได้ตัดสินใจจอง" (ยังไม่จอง!) เป็นบวกผิดๆ มาแล้วจริง
+  const POS = /จอง\s*(แล้ว|เรียบร้อย)/;
+  const NEG = /(ยังไม่|ไม่ได้|ไม่)\s*(ได้)?\s*จอง\s*(แล้ว|เรียบร้อย)/;
+  return POS.test(t) && !NEG.test(t);
+}
 
 /* =========================================================================
    C2. SEGMENT / PREDICT SCORE / RECOMMENDATION — ต่อยอดจากพอร์ตรายคน
@@ -858,15 +896,33 @@ function buildPortfolio(){
     const last  = c.leads[c.leads.length-1] || null;
     const walk  = c.walks[c.walks.length-1] || null;
 
-    // ---- ช่องทางต้นทาง : ใช้ contact แรกที่ระบุชนิดได้ ----
-    let channel = null, source = null;
-    for (const r of c.leads){
+    // ---- ช่องทางต้นทาง : มีแบบสอบถาม Walk-In จริง = Walk In เสมอ (สำคัญกว่าที่มาการติดต่อ) ----
+    // ใช้ 1 CustomerID เป็นกุญแจรวมพอร์ตข้ามหลายโครงการ — ถ้ามีแบบสอบถาม Walk-In จริง ให้ยึดเป็นหลักก่อน
+    // ป้องกันลูกค้าที่ลงทะเบียนออนไลน์ก่อนแล้วค่อยเดินมา Walk-In จริง ถูกนับไปอยู่ช่องทาง Register/Chat แทน
+    // (พบจากการตรวจสอบยอด Walk In ไม่ตรงกับไฟล์แบบสอบถามจริง 2026-08-29)
+    let channel = null, source = null, noInboundRecord = false;
+    if (c.walks.length){ channel = CH_WALKIN; source = "Walk In"; }
+    // ---- ก่อนอื่นให้หาช่องทางจากการติดต่อ "เข้ามาจริง" เท่านั้น (chan !== Outbound) ----
+    // ContactType ในไฟล์ Outbound เป็นแค่ป้ายที่มาเดิมของลูกค้าที่ติดมาจากกิจกรรมก่อนหน้า ไม่ใช่หลักฐาน
+    // ว่าลูกค้าติดต่อเข้ามาในช่วงนี้จริง — ถ้าใช้ปนกันจะทำให้ลูกค้าที่เซลส์โทรตามจากรายชื่อเก่า (ไม่เคย
+    // มีข้อมูล Inbound เลยในไฟล์ที่อัปโหลด) ถูกนับเป็น Register/Chat ผิดๆ ปนกับลูกค้าที่ติดต่อเข้ามาจริง
+    // (พบจากการตรวจสอบยอด Inbound แต่ละช่องทางไม่ตรงกับไฟล์ inbound จริง 2026-08-29)
+    if (!channel) for (const r of c.leads){
+      if (r.chan === "Outbound") continue;
       const [ch,sr] = channelOf(r.type, r.chan);
       if (ch !== CH_OTHER){ channel = ch; source = sr; break; }
     }
-    if (!channel && c.leads.length){ const [ch,sr]=channelOf(last.type,last.chan); channel=ch; source=sr; }
+    // ---- ไม่มี Inbound เลย (ลูกค้าเก่าที่เซลส์โทรตามจากรายชื่อเดิม นอกช่วงไฟล์ที่ export) ----
+    // แยกออกจาก Register/Chat ไปไว้ที่ "อื่นๆ" เสมอ ไม่ให้ปนกับลูกค้าที่ติดต่อเข้ามาจริงในช่วงนี้
+    // (ยืนยันแนวทางกับผู้ใช้แล้ว 2026-08-29) — เก็บป้ายที่มาเดิมไว้ใน source เพื่อดูอ้างอิงได้ในตาราง/Excel
+    if (!channel) for (const r of c.leads){
+      const [ch,sr] = channelOf(r.type, r.chan);
+      if (ch !== CH_OTHER){ channel = CH_OTHER; source = sr + " (ไม่มี Inbound ในช่วงนี้)"; noInboundRecord = true; break; }
+    }
+    if (!channel && c.leads.length){
+      channel = CH_OTHER; source = (last.type || last.chan || "ไม่ระบุ") + " (ไม่มี Inbound ในช่วงนี้)"; noInboundRecord = true;
+    }
     if (!channel){ channel = CH_WALKIN; source = "Walk In"; }
-    if (!c.leads.length && c.walks.length){ channel = CH_WALKIN; source = "Walk In"; }
 
     // ---- พนักงานขายเจ้าของพอร์ต ----
     let sp = "";
@@ -881,7 +937,14 @@ function buildPortfolio(){
     let lastAct = "";
     for (let i=c.leads.length-1;i>=0 && !lastAct;i--) if (c.leads[i].act) lastAct = c.leads[i].act;
     const P = parseActivity(lastAct);
-    const booked  = c.leads.some(r=>isBooked(r.act)) || !!(walk && walk.buyReason);
+    const textBookedHits = [];
+    // walk.noBuyReason เป็นช่อง checkbox เลือกได้หลายข้อ (คั่นด้วย comma) — ถ้ามีตัวเลือกอื่นปนมาด้วย
+    // (เช่น "โครงการอื่นน่าสนใจกว่า, จองแล้ว") "จองแล้ว" อาจแปลว่า "จองโครงการอื่นแล้ว" ไม่ใช่จองที่นี่
+    // จึงเชื่อถือได้เฉพาะกรณีเป็นคำตอบเดี่ยวๆ ไม่ปนกับเหตุผลอื่น
+    if (walk && !/,/.test(walk.noBuyReason||"") && bookedTextSignal(walk.noBuyReason)) textBookedHits.push(walk.noBuyReason);
+    if (walk && bookedTextSignal(walk.log)) textBookedHits.push(walk.log);
+    c.leads.forEach(r=>{ if (bookedTextSignal(r.det)) textBookedHits.push(r.det); });
+    const booked  = c.leads.some(r=>isBooked(r.act)) || !!(walk && walk.buyReason) || textBookedHits.length > 0;
     const appt    = c.leads.some(r=>isAppt(r.act));
     const visited = c.walks.length > 0 || c.leads.some(r=>/visit ?site/i.test(r.type||""));
     let status = lastAct ? P.group : "New";
@@ -901,8 +964,8 @@ function buildPortfolio(){
       id: c.id,
       name: (last && last.name) || (walk && walk.name) || "",
       mobile: (last && last.mobile) || (walk && walk.mobile) || "",
-      project: (last && last.proj) || (walk && walk.proj) || "",
-      channel, source,
+      project: (walk && walk.proj) || (last && last.proj) || "",
+      channel, source, noInboundRecord,
       salesperson: sp,
       status, statusLabel: STATUS_LABEL[status],
       activityRaw: lastAct, reason: P.reason || "",
@@ -918,7 +981,8 @@ function buildPortfolio(){
       lineId: pick("lineId"), fbId: pick("fbId"),
       walkDate: walk ? walk.date : "",
       walkStatus: walk ? walk.custStatus : "",
-      buyReason: walk ? walk.buyReason : "",
+      buyReason: (walk && walk.buyReason) ? walk.buyReason
+        : (textBookedHits[0] ? "[ตรวจพบจากข้อความบันทึก] " + textBookedHits[0].slice(0,300) : ""),
       noBuyReason: walk ? walk.noBuyReason : "",
       budget: walk ? walk.budget : "",
       decideTime: walk ? walk.decide : "",
@@ -987,7 +1051,7 @@ $("#btnClear").onclick = () => { PENDING=[]; renderFileList(); $("#parseStat").t
 
 $("#btnProcess").onclick = async () => {
   const btn = $("#btnProcess"); btn.disabled = true; btn.textContent = "กำลังอ่านไฟล์…";
-  RAW.leadRows = []; RAW.walkRows = []; RAW.files = [];
+  RAW.leadRows = []; RAW.walkRows = []; RAW.files = []; IO.inited = false;
   const log = [];
   try {
     for (const f of PENDING){
@@ -1063,7 +1127,8 @@ $("#tabs").onclick = e => {
   const b = e.target.closest(".tab"); if (!b) return;
   state.tab = b.dataset.t;
   document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("on", x===b));
-  ["ov","sg","sp","wi","rg","ch","fu"].forEach(k=>$("#pane-"+k).classList.toggle("hide", k!==state.tab));
+  ["ov","sg","sp","wi","rg","ch","fu","io"].forEach(k=>$("#pane-"+k).classList.toggle("hide", k!==state.tab));
+  if (b.dataset.t === "io" && !IO.inited) initInboundOutbound();
 };
 
 /* ---------------- ตัวช่วยคำนวณ ---------------- */
@@ -1124,7 +1189,9 @@ function renderOverview(rows){
     ["จองแล้ว", fmt(F.booked), pctS(F.booked,F.leads)+" ของลูกค้าในมือ"],
     ["Walk In แล้วไม่จอง", fmt(F.notBooked), pctS(F.notBooked,F.visit)+" ของผู้มา Walk In"],
     ["ยังต้องติดตาม", fmt(F.open), "ใหม่ + กำลังติดตาม"],
-    ["หลุด / ไม่สนใจ", fmt(F.lost), pctS(F.lost,F.leads)+" ของลูกค้าในมือ"]
+    ["หลุด / ไม่สนใจ", fmt(F.lost), pctS(F.lost,F.leads)+" ของลูกค้าในมือ"],
+    ["ไม่มี Inbound ในช่วงนี้", fmt(rows.filter(p=>p.noInboundRecord).length),
+      "โทรตามรายชื่อเก่า/นอกช่วงไฟล์ที่อัปโหลด"]
   ];
   $("#ovKpi").innerHTML = K.map(k=>'<div class="kpi"><div class="k">'+k[0]+'</div><div class="v">'+k[1]+'</div><div class="d">'+k[2]+'</div></div>').join("");
 
@@ -1149,10 +1216,10 @@ function renderOverview(rows){
 
   $("#ovDefs").innerHTML = [
     "<b>ลูกค้าในมือ (On-Hand)</b> = 1 CustomerID นับ 1 ราย ไม่นับซ้ำตามจำนวนครั้งที่ติดต่อ",
-    "<b>ช่องทางที่มา</b> = ช่องทางของการติดต่อครั้งแรกสุด (Register = ลงทะเบียนเว็บไซต์ · Chat Inbound = Line/Facebook/Instagram/Contact Center · Walk In = เดินเข้าโครงการ/Booth/Visit Site โดยไม่มีลงทะเบียนก่อน)",
+    "<b>ช่องทางที่มา</b> = มีแบบสอบถาม Walk-In จริง → Walk In เสมอ · ถ้าไม่มี ใช้การติดต่อ <b>Inbound จริง</b> ครั้งแรกสุด (ไม่นับ Outbound) (Register = ลงทะเบียนเว็บไซต์ · Chat Inbound = Line/Facebook/Instagram/Contact Center) · ลูกค้าที่ไม่มีข้อมูล Inbound เลยในไฟล์ที่อัปโหลด (มีแต่ประวัติ Outbound เก่า/นอกช่วง) จะถูกจัดเป็น “อื่นๆ” เสมอ ไม่นับรวมกับ Register/Chat (ดู “ไม่มี Inbound ในช่วงนี้” ในภาพรวม)",
     "<b>นัดหมายได้</b> = มีบันทึกกิจกรรมที่ระบุคำว่า “นัดหมาย” ใน ContactActivity เท่านั้น (นับเฉพาะนัดหมายจริง แยกออกจาก Walk-In ที่ลูกค้ามาเองโดยไม่มีนัด)",
     "<b>Walk In มาจริง</b> = มีแบบสอบถาม Walk-In หรือมี ContactType = Visit Site",
-    "<b>จอง</b> = มีกิจกรรม “(A) Close / จองแล้ว” หรือกรอกเหตุผลที่ตัดสินใจซื้อในแบบสอบถาม",
+    "<b>จอง</b> = มีกิจกรรม “(A) Close / จองแล้ว” หรือกรอกเหตุผลที่ตัดสินใจซื้อในแบบสอบถาม หรือพบข้อความยืนยันการจอง (เช่น “ตัดสินใจจอง”, “จองแล้ว”) ในบันทึกอิสระ โดยไม่นับกรณีมีคำปฏิเสธ เช่น “ยังไม่จอง” — เป็น heuristic จากข้อความ ควรสุ่มตรวจสอบเป็นระยะ",
     "<b>ไม่จอง</b> = มา Walk In แล้วแต่ยังไม่มีสถานะจอง",
     "<b>สถานะการติดตาม</b> = จากรหัสหน้ากิจกรรมล่าสุด — (A)=จองแล้ว · (B)(C)=กำลังติดตาม · (D)(F)=หลุด · PDPA=ปฏิเสธการติดต่อ · ไม่มีบันทึก=ใหม่",
     "<b>พนักงานขายเจ้าของพอร์ต</b> = ผู้บันทึกกิจกรรมล่าสุด (ไม่นับ WebSite/ContactCenter API) หากไม่มีจะใช้ผู้รับ Walk In"
@@ -1476,6 +1543,127 @@ function fallbackCopy(txt, done){
   try { document.execCommand("copy"); done(); } catch(e){ toast("คัดลอกไม่สำเร็จ — กรุณาเลือกข้อความแล้วคัดลอกเอง"); }
   ta.remove();
 }
+
+/* =========================================================================
+   INBOUND -> OUTBOUND FEEDBACK — ยึด Inbound เป็นหลัก ดึง Feedback จาก Outbound
+   จับคู่ด้วย CustomerID เท่านั้น ไม่จำกัดว่า Outbound ต้องอยู่ในช่วงวันที่เดียวกับ
+   Inbound เพราะเซลส์มักโทรติดตามต่อเนื่องนอกช่วงไฟล์ที่ export มา (ตามที่ผู้ใช้ระบุ)
+   ========================================================================= */
+const IO = { inited:false, from:"", to:"", type:"__all" };
+
+function initInboundOutbound(){
+  IO.inited = true;
+  const inboundRows = RAW.leadRows.filter(r=>r.chan !== "Outbound");
+  const dates = inboundRows.map(r=>r.date).filter(Boolean).sort();
+  const min = dates[0]||"", max = dates[dates.length-1]||"";
+  IO.from = min; IO.to = max;
+  const f = $("#ioFrom"), t = $("#ioTo");
+  f.min = t.min = min; f.max = t.max = max; f.value = min; t.value = max;
+  const types = Array.from(new Set(inboundRows.map(r=>r.type).filter(Boolean))).sort();
+  $("#ioType").innerHTML = '<option value="__all">ทุกประเภท ('+types.length+')</option>'
+    + types.map(ty=>'<option value="'+encodeURIComponent(ty)+'">'+esc(ty)+'</option>').join("");
+  f.onchange = ()=>{ IO.from=f.value; renderInboundOutbound(); };
+  t.onchange = ()=>{ IO.to=t.value; renderInboundOutbound(); };
+  $("#ioType").onchange = e=>{ IO.type = e.target.value==="__all"?"__all":decodeURIComponent(e.target.value); renderInboundOutbound(); };
+  $("#ioReset").onclick = ()=>{ f.value=min; t.value=max; $("#ioType").value="__all";
+    Object.assign(IO,{from:min,to:max,type:"__all"}); renderInboundOutbound(); };
+  $("#ioExcel").onclick = async ()=>{ const b=$("#ioExcel"); b.disabled=true; const old=b.textContent; b.textContent="กำลังสร้างไฟล์…";
+    try { await exportInboundOutbound(); toast("ส่งออก Excel สำเร็จ"); }
+    catch(e){ toast("ส่งออกไม่สำเร็จ: "+e.message); console.error(e); }
+    finally { b.disabled=false; b.textContent=old; } };
+  renderInboundOutbound();
+}
+
+function inboundOutboundCohort(){
+  const inboundRows = RAW.leadRows.filter(r=>r.chan !== "Outbound"
+    && (!IO.from || r.date >= IO.from) && (!IO.to || r.date <= IO.to)
+    && (IO.type==="__all" || r.type === IO.type));
+  const byId = new Map();
+  inboundRows.forEach(r=>{
+    const cur = byId.get(r.id);
+    if (!cur || (r.date+r.time) < (cur.date+cur.time)) byId.set(r.id, r); // เก็บครั้งแรกสุดในช่วงที่เลือก
+  });
+  const outboundById = new Map();
+  RAW.leadRows.forEach(r=>{ if (r.chan==="Outbound"){ if(!outboundById.has(r.id)) outboundById.set(r.id,[]); outboundById.get(r.id).push(r); } });
+  const portById = new Map(PORT.map(p=>[String(p.id), p]));
+  return Array.from(byId.values()).map(inRow=>{
+    const outs = (outboundById.get(inRow.id)||[]).slice().sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time));
+    return { inRow, outs, p: portById.get(String(inRow.id)) };
+  });
+}
+
+function outboundNote(c){
+  const o = c.outs[0];
+  const txt = (o.act ? o.act+" — " : "") + (o.det||"");
+  const cut = txt.length>140 ? esc(txt.slice(0,140))+"…" : esc(txt);
+  const openId = c.p ? c.p.id : c.inRow.id;
+  return '<span class="muted">'+cut+'</span>'+(txt.length>140?' <a href="#" class="cust" data-open-id="'+esc(openId)+'">อ่านเพิ่มเติม »</a>':"");
+}
+
+function renderInboundOutbound(){
+  const cohort = inboundOutboundCohort();
+  const withFollowup = cohort.filter(c=>c.outs.length>0).length;
+  const noFollowup = cohort.length - withFollowup;
+  const totalOutCalls = cohort.reduce((a,c)=>a+c.outs.length,0);
+  const K = [
+    ["ลูกค้า Inbound ในช่วงที่เลือก", fmt(cohort.length), "ราย (unique CustomerID)"],
+    ["มีการโทรออกติดตามแล้ว", fmt(withFollowup), pctS(withFollowup, cohort.length||1)+" ของกลุ่มนี้"],
+    ["ยังไม่มีการโทรออกเลย", fmt(noFollowup), noFollowup ? "ต้องเร่งติดตาม" : "ครบทุกราย"],
+    ["จำนวนครั้งโทรออกรวม", fmt(totalOutCalls), cohort.length ? (totalOutCalls/cohort.length).toFixed(1)+" ครั้ง/ราย เฉลี่ย" : ""]
+  ];
+  $("#ioKpi").innerHTML = K.map(k=>'<div class="kpi"><div class="k">'+k[0]+'</div><div class="v">'+k[1]+'</div><div class="d">'+k[2]+'</div></div>').join("");
+  $("#ioTblTitle").textContent = "รายชื่อลูกค้า Inbound "+(IO.from||"")+" ถึง "+(IO.to||"")
+    + (IO.type!=="__all" ? (" · ประเภท "+IO.type) : "") + " ("+fmt(cohort.length)+" ราย)";
+
+  const cols = [
+    {t:"CustomerID", f:c=>c.inRow.id, nowrap:1},
+    {t:"ชื่อลูกค้า", f:c=> c.p ? custLink(c.p) : esc(c.inRow.name||"–")},
+    {t:"เบอร์โทร", f:c=>esc(c.inRow.mobile||(c.p&&c.p.mobile)||"–"), nowrap:1},
+    {t:"วันที่ติดต่อเข้า", f:c=>esc(c.inRow.date)+" "+esc(c.inRow.time||""), nowrap:1},
+    {t:"ประเภท Inbound", f:c=>srcPill(c.inRow.type||c.inRow.chan||"–"), nowrap:1},
+    {t:"สอบถามเรื่อง", f:c=>{ const d=c.inRow.det||""; return esc(d.slice(0,120))+(d.length>120?"…":""); }},
+    {t:"พนักงานขาย", f:c=> c.p ? esc(c.p.salesperson) : "–"},
+    {t:"โทรออกกี่ครั้ง", f:c=>c.outs.length? fmt(c.outs.length) : '<span class="pill warn">ยังไม่โทร</span>', num:1},
+    {t:"โทรออกล่าสุด", f:c=>c.outs[0]? esc(c.outs[0].date) : "–", nowrap:1},
+    {t:"Feedback ล่าสุดจาก Outbound", f:c=> c.outs.length ? outboundNote(c) : '<span class="muted">–</span>'},
+    {t:"สถานะปัจจุบัน", f:c=> c.p ? statusPill(c.p.status) : "–", nowrap:1}
+  ];
+  const sorted = cohort.slice().sort((a,b)=> (a.outs.length-b.outs.length) || String(a.inRow.date).localeCompare(String(b.inRow.date)));
+  $("#ioTable").innerHTML = tableHTML(cols, sorted);
+}
+
+async function exportInboundOutbound(){
+  const cohort = inboundOutboundCohort()
+    .sort((a,b)=> (a.outs.length-b.outs.length) || String(a.inRow.date).localeCompare(String(b.inRow.date)));
+  const R = [];
+  R.push([{v:"Inbound → Outbound Feedback — "+(IO.from||"")+" ถึง "+(IO.to||"")+(IO.type!=="__all"?(" · "+IO.type):""), s:S_TITLE}]);
+  R.push([{v:"หมายเหตุ: จำนวนครั้งโทรออก/Feedback นับจากประวัติ Outbound ทั้งหมดของลูกค้า ไม่จำกัดช่วงวันที่ด้านบน", s:S_LBL}]);
+  R.push([]);
+  R.push([H("CustomerID"),H("ชื่อลูกค้า"),H("เบอร์โทร"),H("วันที่ติดต่อเข้า Inbound"),H("ประเภท Inbound"),
+    H("สอบถามเรื่อง (Inbound)"),H("พนักงานขาย"),H("จำนวนครั้งโทรออก"),H("โทรออกล่าสุด"),
+    H("Feedback ล่าสุดจาก Outbound"),H("สถานะปัจจุบัน"),H("Predict Score")]);
+  cohort.forEach(c=>{
+    const o = c.outs[0];
+    R.push([
+      c.inRow.id, (c.p&&c.p.name)||c.inRow.name, (c.p&&c.p.mobile)||c.inRow.mobile,
+      c.inRow.date+" "+(c.inRow.time||""), c.inRow.type||c.inRow.chan, c.inRow.det,
+      c.p?c.p.salesperson:"", N(c.outs.length), o?o.date:"",
+      o?((o.act?o.act+" — ":"")+(o.det||"")):"",
+      c.p?c.p.statusLabel:"", c.p?N(c.p.score):""
+    ]);
+  });
+  const specs = [{ name:"Inbound-Outbound", cols:[12,22,15,17,16,40,22,12,13,60,18,12], rows:R, freeze:"A5", filterRow:4 }];
+
+  const R2 = [];
+  R2.push([H("CustomerID"),H("ชื่อลูกค้า"),H("วันที่โทรออก"),H("เวลา"),H("ContactActivity"),H("Feedback / รายละเอียด"),H("โดย")]);
+  cohort.forEach(c=>{ c.outs.forEach(o=>{
+    R2.push([c.inRow.id, (c.p&&c.p.name)||c.inRow.name, o.date, o.time, o.act, o.det, o.ub||o.cb]);
+  }); });
+  specs.push({ name:"ประวัติ Outbound ทั้งหมด", cols:[12,22,13,9,30,60,22], rows:R2, freeze:"A2", filterRow:1 });
+
+  const tag = (IO.type==="__all"?"AllType":IO.type).replace(/[^\wก-๙]+/g,"_").slice(0,20);
+  await buildXlsx(specs, "Inbound_Outbound_"+tag+"_"+IO.from+"_to_"+IO.to+".xlsx");
+}
 </script>
 <script>
 "use strict";
@@ -1560,10 +1748,10 @@ async function exportExcel(){
     R.push([{v:"นิยามที่ใช้คำนวณ", s:S_TITLE}]);
     [
       "ลูกค้าในมือ (On-Hand) = 1 CustomerID นับ 1 ราย ไม่นับซ้ำตามจำนวนครั้งที่ติดต่อ",
-      "ช่องทางที่มา = ช่องทางของการติดต่อครั้งแรกสุด (Register = ลงทะเบียนเว็บไซต์, Chat Inbound = Line/Facebook/Instagram/Contact Center, Walk In = เดินเข้าโครงการ/Booth/Visit Site โดยไม่มีลงทะเบียนก่อน)",
+      "ช่องทางที่มา = มีแบบสอบถาม Walk-In จริง -> Walk In เสมอ ถ้าไม่มี ใช้การติดต่อ Inbound จริงครั้งแรกสุด (ไม่นับ Outbound) (Register = ลงทะเบียนเว็บไซต์, Chat Inbound = Line/Facebook/Instagram/Contact Center) ลูกค้าที่ไม่มีข้อมูล Inbound เลยในไฟล์ที่อัปโหลด (มีแต่ประวัติ Outbound เก่า/นอกช่วง) จะถูกจัดเป็น \"อื่นๆ\" เสมอ ไม่นับรวมกับ Register/Chat",
       "นัดหมายได้ = มีบันทึกกิจกรรมที่ระบุคำว่า \"นัดหมาย\" ใน ContactActivity เท่านั้น (นับเฉพาะนัดหมายจริง แยกออกจาก Walk-In ที่ลูกค้ามาเองโดยไม่มีนัด)",
       "Walk In มาจริง = มีแบบสอบถาม Walk-In หรือมี ContactType = Visit Site",
-      "จอง = มีกิจกรรม \"(A) Close / จองแล้ว\" หรือกรอกเหตุผลที่ตัดสินใจซื้อในแบบสอบถาม Walk-In",
+      "จอง = มีกิจกรรม \"(A) Close / จองแล้ว\" หรือกรอกเหตุผลที่ตัดสินใจซื้อในแบบสอบถาม Walk-In หรือพบข้อความยืนยันการจอง (เช่น \"ตัดสินใจจอง\", \"จองแล้ว\") ในบันทึกอิสระ โดยไม่นับกรณีมีคำปฏิเสธ เช่น \"ยังไม่จอง\" — เป็น heuristic จากข้อความ ควรสุ่มตรวจสอบเป็นระยะ",
       "ไม่จอง = มา Walk In แล้วแต่ยังไม่มีสถานะจอง",
       "สถานะการติดตาม = จากรหัสหน้ากิจกรรมล่าสุด (A)=จองแล้ว (B)(C)=กำลังติดตาม (D)(F)=หลุด PDPA=ปฏิเสธการติดต่อ ไม่มีบันทึก=ใหม่",
       "พนักงานขายเจ้าของพอร์ต = ผู้บันทึกกิจกรรมล่าสุด (ไม่นับ WebSite API / ContactCenter API) หากไม่มีจะใช้ผู้รับ Walk In",
