@@ -268,7 +268,7 @@ textarea.copytxt{width:100%;min-height:96px;font:inherit;font-size:12.5px;paddin
     <div id="pane-sp" class="hide">
       <div class="card">
         <h2>พอร์ตลูกค้า ON HAND แยกตามพนักงานขายรายบุคคล</h2>
-        <p class="sub">คลิกหัวคอลัมน์เพื่อเรียงลำดับ · คลิกชื่อพนักงานเพื่อกรองทั้งแดชบอร์ดเป็นพอร์ตของคนนั้น</p>
+        <p class="sub">คลิกหัวคอลัมน์เพื่อเรียงลำดับ · คลิกชื่อพนักงานเพื่อกรองทั้งแดชบอร์ดเป็นพอร์ตของคนนั้น · คลิกตัวเลข Walk In/Register/Chat/อื่นๆ เพื่อดูรายชื่อ+Feedback แยกตามเหตุผลจากกิจกรรมล่าสุด</p>
         <div class="tbl-wrap" style="margin-top:12px"><table id="spTable"></table></div>
       </div>
     </div>
@@ -946,7 +946,11 @@ function buildPortfolio(){
     c.leads.forEach(r=>{ if (bookedTextSignal(r.det)) textBookedHits.push(r.det); });
     const booked  = c.leads.some(r=>isBooked(r.act)) || !!(walk && walk.buyReason) || textBookedHits.length > 0;
     const appt    = c.leads.some(r=>isAppt(r.act));
-    const visited = c.walks.length > 0 || c.leads.some(r=>/visit ?site/i.test(r.type||""));
+    // "มาจริง" (visited) เข้มงวดเท่ากับช่องทาง Walk In เสมอ — นับเฉพาะมีแบบสอบถาม Walk-In จริงเท่านั้น
+    // ContactType = Visit Site ใน Outbound ไม่ใช่หลักฐานว่ามาชมโครงการใหม่ — เป็นแค่แท็กกิจกรรม
+    // "โทรติดตามลูกค้าที่เคยมาชมโครงการแล้ว" (Follow Up) เท่านั้น จึงห้ามใช้จับ "มาจริง" เด็ดขาด
+    // (ยืนยันแนวทางกับผู้ใช้แล้ว 2026-08-29)
+    const visited = c.walks.length > 0;
     let status = lastAct ? P.group : "New";
     if (booked) status = "Won";
 
@@ -1164,6 +1168,10 @@ const segPill = s => '<span class="pill" style="background:color-mix(in srgb,'+c
 const custLink = p => '<a href="#" class="cust" data-open-id="'+esc(p.id)+'">'+esc(p.name||("ID "+p.id))+'</a>';
 const scoreBar = s => { const m=scoreMeta(s);
   return '<div class="scorewrap"><div class="scorebar"><i style="width:'+s+'%;background:'+cssVar(m.cv)+'"></i></div><span class="scorenum">'+s+'</span></div>'; };
+function chanLink(sp, channel, n){
+  if (!n) return "0";
+  return '<a href="#" class="cust" data-open-chan-sp="'+encodeURIComponent(sp)+'" data-open-chan="'+encodeURIComponent(channel)+'">'+fmt(n)+'</a>';
+}
 function noteSnippet(r){
   const full = r.feedback || "";
   if (!full) return "";
@@ -1218,7 +1226,7 @@ function renderOverview(rows){
     "<b>ลูกค้าในมือ (On-Hand)</b> = 1 CustomerID นับ 1 ราย ไม่นับซ้ำตามจำนวนครั้งที่ติดต่อ",
     "<b>ช่องทางที่มา</b> = มีแบบสอบถาม Walk-In จริง → Walk In เสมอ · ถ้าไม่มี ใช้การติดต่อ <b>Inbound จริง</b> ครั้งแรกสุด (ไม่นับ Outbound) (Register = ลงทะเบียนเว็บไซต์ · Chat Inbound = Line/Facebook/Instagram/Contact Center) · ลูกค้าที่ไม่มีข้อมูล Inbound เลยในไฟล์ที่อัปโหลด (มีแต่ประวัติ Outbound เก่า/นอกช่วง) จะถูกจัดเป็น “อื่นๆ” เสมอ ไม่นับรวมกับ Register/Chat (ดู “ไม่มี Inbound ในช่วงนี้” ในภาพรวม)",
     "<b>นัดหมายได้</b> = มีบันทึกกิจกรรมที่ระบุคำว่า “นัดหมาย” ใน ContactActivity เท่านั้น (นับเฉพาะนัดหมายจริง แยกออกจาก Walk-In ที่ลูกค้ามาเองโดยไม่มีนัด)",
-    "<b>Walk In มาจริง</b> = มีแบบสอบถาม Walk-In หรือมี ContactType = Visit Site",
+    "<b>Walk In มาจริง</b> = มีแบบสอบถาม Walk-In จริงเท่านั้น (เข้มงวดเท่าช่องทาง Walk In) — ไม่นับแค่มีบันทึกกิจกรรม ContactType = Visit Site ที่ไม่มีแบบสอบถามยืนยัน",
     "<b>จอง</b> = มีกิจกรรม “(A) Close / จองแล้ว” หรือกรอกเหตุผลที่ตัดสินใจซื้อในแบบสอบถาม หรือพบข้อความยืนยันการจอง (เช่น “ตัดสินใจจอง”, “จองแล้ว”) ในบันทึกอิสระ โดยไม่นับกรณีมีคำปฏิเสธ เช่น “ยังไม่จอง” — เป็น heuristic จากข้อความ ควรสุ่มตรวจสอบเป็นระยะ",
     "<b>ไม่จอง</b> = มา Walk In แล้วแต่ยังไม่มีสถานะจอง",
     "<b>สถานะการติดตาม</b> = จากรหัสหน้ากิจกรรมล่าสุด — (A)=จองแล้ว · (B)(C)=กำลังติดตาม · (D)(F)=หลุด · PDPA=ปฏิเสธการติดต่อ · ไม่มีบันทึก=ใหม่",
@@ -1277,6 +1285,7 @@ function renderSales(rows){
     const idle = rs.filter(p=>(p.status==="Pending"||p.status==="New") && p.daysIdle!==""&&p.daysIdle>7).length;
     return { sp, onhand:F.leads, walkin:rs.filter(p=>p.channel===CH_WALKIN).length,
       register:rs.filter(p=>p.channel===CH_REGISTER).length, chat:rs.filter(p=>p.channel===CH_CHAT).length,
+      other:rs.filter(p=>p.channel===CH_OTHER).length,
       appt:F.appt, visit:F.visit, booked:F.booked, notBooked:F.notBooked, open:F.open, lost:F.lost,
       conv:pct(F.booked,F.leads), idle };
   });
@@ -1285,9 +1294,10 @@ function renderSales(rows){
   const cols = [
     {t:"พนักงานขาย", key:"sp", f:r=>'<a href="#" data-sp="'+encodeURIComponent(r.sp)+'" style="color:var(--accent-ink);font-weight:600;text-decoration:none">'+r.sp+'</a>'},
     {t:"ลูกค้าในมือ", key:"onhand", num:1, f:r=>fmt(r.onhand)},
-    {t:"Walk In", key:"walkin", num:1, f:r=>fmt(r.walkin)},
-    {t:"Register", key:"register", num:1, f:r=>fmt(r.register)},
-    {t:"Chat", key:"chat", num:1, f:r=>fmt(r.chat)},
+    {t:"Walk In", key:"walkin", num:1, f:r=>chanLink(r.sp, CH_WALKIN, r.walkin)},
+    {t:"Register", key:"register", num:1, f:r=>chanLink(r.sp, CH_REGISTER, r.register)},
+    {t:"Chat", key:"chat", num:1, f:r=>chanLink(r.sp, CH_CHAT, r.chat)},
+    {t:"อื่นๆ", key:"other", num:1, f:r=>chanLink(r.sp, CH_OTHER, r.other)},
     {t:"นัดหมายได้", key:"appt", num:1, f:r=>fmt(r.appt)},
     {t:"มาจริง", key:"visit", num:1, f:r=>fmt(r.visit)},
     {t:"จอง", key:"booked", num:1, f:r=>fmt(r.booked)},
@@ -1301,7 +1311,7 @@ function renderSales(rows){
   const T = funnelOf(rows);
   const el = $("#spTable");
   el.innerHTML = tableHTML(cols, list, {foot:["รวม "+list.length+" คน",fmt(S("onhand")),fmt(S("walkin")),
-    fmt(S("register")),fmt(S("chat")),fmt(S("appt")),fmt(S("visit")),fmt(S("booked")),fmt(S("notBooked")),
+    fmt(S("register")),fmt(S("chat")),fmt(S("other")),fmt(S("appt")),fmt(S("visit")),fmt(S("booked")),fmt(S("notBooked")),
     pctS(T.booked,T.leads),fmt(S("open")),fmt(S("idle")),fmt(S("lost"))]});
   el.querySelectorAll("th").forEach((th,i)=>{ th.onclick=()=>{
     const key = cols[i].key; if(!key) return;
@@ -1530,6 +1540,67 @@ document.addEventListener("click", e=>{
   e.preventDefault(); openCustModal(a.dataset.openId);
 });
 
+/* ---------------- CHANNEL BREAKDOWN (drill-down จากตารางแยกตามพนักงานขาย) ---------------- */
+let chanBreakdownFilter = "__all";
+function openChannelBreakdown(sp, channel){
+  chanBreakdownFilter = "__all";
+  renderChannelBreakdown(sp, channel);
+  $("#modalBg").classList.remove("hide");
+}
+function renderChannelBreakdown(sp, channel){
+  const rows = filtered().filter(p=>p.salesperson===sp && p.channel===channel);
+  const ids = new Set(rows.map(p=>p.id));
+  const totalActs = ACTS.filter(a=>ids.has(a.id)).length;
+
+  const byReason = new Map();
+  rows.forEach(p=>{
+    const key = p.reason || "(ไม่มีบันทึกกิจกรรม)";
+    if (!byReason.has(key)) byReason.set(key, []);
+    byReason.get(key).push(p);
+  });
+  const reasonList = Array.from(byReason.entries()).sort((a,b)=>b[1].length-a[1].length);
+  if (chanBreakdownFilter!=="__all" && !byReason.has(chanBreakdownFilter)) chanBreakdownFilter = "__all";
+  const list = (chanBreakdownFilter==="__all" ? rows : (byReason.get(chanBreakdownFilter)||[]))
+    .slice().sort((a,b)=>(b.lastDate||"").localeCompare(a.lastDate||""));
+
+  const cols = [
+    {t:"CustomerID", f:p=>p.id, nowrap:1},
+    {t:"ชื่อลูกค้า", f:p=>custLink(p)},
+    {t:"เบอร์โทร", f:p=>p.mobile||"–", nowrap:1},
+    {t:"สถานะ", f:p=>statusPill(p.status), nowrap:1},
+    {t:"เหตุผล / Feedback ล่าสุด (Last Activity)", f:p=>(p.reason?"<b>"+esc(p.reason)+"</b><br>":"")+noteSnippet(p)},
+    {t:"ติดต่อล่าสุด", f:p=>p.lastDate||"–", nowrap:1},
+    {t:"ค้าง (วัน)", f:p=>p.daysIdle===""?"–":p.daysIdle, num:1}
+  ];
+
+  $("#modalCard").innerHTML =
+    '<button class="modal-close" id="mClose">&times;</button>'
+    + '<h2>'+esc(channel)+' — '+esc(sp)+'</h2>'
+    + '<p class="sub">รวมทั้งหมด <b>'+fmt(rows.length)+' ราย</b> (unique CustomerID ตามที่แสดงในตาราง) '
+      + '· มีบันทึกกิจกรรมสะสมทั้งหมด <b>'+fmt(totalActs)+' ครั้ง</b> (ก่อนตัดซ้ำ นับทุกครั้งที่ติดต่อ) '
+      + '· จัดกลุ่มด้านล่างตามเหตุผลของกิจกรรมล่าสุด (Last Activity) ของแต่ละคน — คลิกกลุ่มเพื่อกรอง คลิกชื่อลูกค้าเพื่อดู Feedback เต็ม</p>'
+    + '<div class="segwrap" style="margin-top:12px">'
+      + '<button class="segcard'+(chanBreakdownFilter==="__all"?" on":"")+'" data-reason="__all">'
+        + '<div class="si">📋</div><div class="sl">ทั้งหมด</div><div class="sv">'+fmt(rows.length)+'</div></button>'
+      + reasonList.map(([reason,rs])=>
+          '<button class="segcard'+(chanBreakdownFilter===reason?" on":"")+'" data-reason="'+esc(reason)+'">'
+          + '<div class="sl">'+esc(reason)+'</div><div class="sv">'+fmt(rs.length)+'</div>'
+          + '<div class="sd">'+pctS(rs.length,rows.length)+' ของกลุ่มนี้</div></button>').join("")
+    + '</div>'
+    + '<div class="tbl-wrap" style="margin-top:14px"><table>'+tableHTML(cols, list)+'</table></div>';
+
+  $("#mClose").onclick = closeCustModal;
+  $("#modalCard").querySelectorAll("[data-reason]").forEach(b=>b.onclick=()=>{
+    chanBreakdownFilter = b.dataset.reason;
+    renderChannelBreakdown(sp, channel);
+  });
+}
+document.addEventListener("click", e=>{
+  const a = e.target.closest("[data-open-chan]"); if (!a) return;
+  e.preventDefault();
+  openChannelBreakdown(decodeURIComponent(a.dataset.openChanSp), decodeURIComponent(a.dataset.openChan));
+});
+
 function copyText(txt, okMsg){
   const done = ()=>toast(okMsg||"คัดลอกแล้ว");
   if (navigator.clipboard && navigator.clipboard.writeText){
@@ -1750,7 +1821,7 @@ async function exportExcel(){
       "ลูกค้าในมือ (On-Hand) = 1 CustomerID นับ 1 ราย ไม่นับซ้ำตามจำนวนครั้งที่ติดต่อ",
       "ช่องทางที่มา = มีแบบสอบถาม Walk-In จริง -> Walk In เสมอ ถ้าไม่มี ใช้การติดต่อ Inbound จริงครั้งแรกสุด (ไม่นับ Outbound) (Register = ลงทะเบียนเว็บไซต์, Chat Inbound = Line/Facebook/Instagram/Contact Center) ลูกค้าที่ไม่มีข้อมูล Inbound เลยในไฟล์ที่อัปโหลด (มีแต่ประวัติ Outbound เก่า/นอกช่วง) จะถูกจัดเป็น \"อื่นๆ\" เสมอ ไม่นับรวมกับ Register/Chat",
       "นัดหมายได้ = มีบันทึกกิจกรรมที่ระบุคำว่า \"นัดหมาย\" ใน ContactActivity เท่านั้น (นับเฉพาะนัดหมายจริง แยกออกจาก Walk-In ที่ลูกค้ามาเองโดยไม่มีนัด)",
-      "Walk In มาจริง = มีแบบสอบถาม Walk-In หรือมี ContactType = Visit Site",
+      "Walk In มาจริง = มีแบบสอบถาม Walk-In จริงเท่านั้น (เข้มงวดเท่าช่องทาง Walk In) ไม่นับแค่มีบันทึกกิจกรรม ContactType = Visit Site ที่ไม่มีแบบสอบถามยืนยัน",
       "จอง = มีกิจกรรม \"(A) Close / จองแล้ว\" หรือกรอกเหตุผลที่ตัดสินใจซื้อในแบบสอบถาม Walk-In หรือพบข้อความยืนยันการจอง (เช่น \"ตัดสินใจจอง\", \"จองแล้ว\") ในบันทึกอิสระ โดยไม่นับกรณีมีคำปฏิเสธ เช่น \"ยังไม่จอง\" — เป็น heuristic จากข้อความ ควรสุ่มตรวจสอบเป็นระยะ",
       "ไม่จอง = มา Walk In แล้วแต่ยังไม่มีสถานะจอง",
       "สถานะการติดตาม = จากรหัสหน้ากิจกรรมล่าสุด (A)=จองแล้ว (B)(C)=กำลังติดตาม (D)(F)=หลุด PDPA=ปฏิเสธการติดต่อ ไม่มีบันทึก=ใหม่",
